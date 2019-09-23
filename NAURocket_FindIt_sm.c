@@ -4,6 +4,250 @@
 
 //***********************************************************
 
+	volatile uint8_t time_write_to_SD_flag			= 0 ;
+	volatile uint8_t shudown_button_pressed_flag	= 0 ;
+	volatile uint8_t time_read_from_SD_u8			= 0 ;
+
+	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
+	extern DMA_HandleTypeDef hdma_usart3_rx;
+//***********************************************************
+
+void NAURocket_FindIt_Init (void)
+{
+	LCD_Init();
+	LCD_SetRotation(1);
+	LCD_FillScreen(ILI92_BLACK);
+	LCD_SetTextColor(ILI92_GREEN, ILI92_BLACK);
+	LCD_SetCursor(0, 0);
+
+	sprintf(DebugString,"\r\n\r\n");
+	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+	sprintf(DebugString,"NAU_Rocket Find_It\r\n2019 v2.0.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+	LCD_Printf("%s",DebugString);
+
+	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
+	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
+
+	FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
+	if (f_mount(&USERFatFS, "0:", 1) != FR_OK)	/* try to mount SDCARD */
+	{
+		f_mount(NULL, "0:", 0);			/* Unmount SDCARD */
+		Error_Handler();
+		sprintf(DebugString,"\r\nSD-card_mount - Failed \r\n");
+		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+		LCD_Printf("%s",DebugString);
+		HAL_Delay(1000);
+	}
+	else
+	{
+		sprintf(DebugString,"\r\nSD-card_mount - Ok \r\n");
+		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+		LCD_Printf("%s",DebugString);
+	}
+
+	LCD_FillScreen(ILI92_BLACK);
+	HAL_IWDG_Refresh(&hiwdg);
+}
+
+//***********************************************************
+	//***********************************************************
+
+void NAURocket_FindIt_Main (void)
+{
+	switch (sm_stage)
+	{
+		case SM_START:
+		{
+			Clear_variables(&NEO6, &GGA, &CS);
+			TIM_Start();
+			sm_stage =SM_READ_FROM_RINGBUFFER;
+		} break;
+
+		//***********************************************************
+
+		case SM_READ_FROM_RINGBUFFER:
+		{
+			sm_stage = SM_CHECK_FLAGS;
+			Read_from_RingBuffer(&NEO6, &rx_buffer);
+
+			if (time_write_to_SD_flag == 1)
+			{
+				TIM_Stop();
+				sm_stage = SM_FIND_GGA;
+			}
+			if ((time_write_to_SD_flag == 1) && (NEO6.length_int < NEO6_LENGTH_MIN))
+			{
+				sm_stage = SM_START;
+				time_write_to_SD_flag = 0;
+			}
+
+		} break;
+
+		//***********************************************************
+
+		case SM_CHECK_FLAGS:
+		{
+			if (shudown_button_pressed_flag == 1)
+			{
+				sm_stage = SM_SHUTDOWN;
+				break;
+			}
+
+			if (time_read_from_SD_u8 == 1)
+			{
+				sm_stage =SM_READ_FROM_SDCARD;
+				break;
+			}
+			sm_stage = SM_READ_FROM_RINGBUFFER;
+		} break;
+
+		//***********************************************************
+
+		case SM_FIND_GGA:
+		{
+			result = Find_Begin_of_GGA_string(&NEO6, &GGA);
+			if ( result == R_OK)
+			{
+				sm_stage = SM_FIND_ASTERISK;
+			}
+			else
+			{
+				sm_stage = SM_FORCE_COPY_GGA;
+			}
+		} break;
+
+	//***********************************************************
+
+		case SM_FIND_ASTERISK:
+		{
+			result = Find_End_of_GGA_string(&NEO6, &GGA);
+			if ( result == R_OK )
+			{
+				sm_stage = SM_CORRECT_COPY_GGA;
+			}
+			else
+			{
+				sm_stage = SM_FORCE_COPY_GGA;
+			}
+		} break;
+
+	//***********************************************************
+
+		case SM_CORRECT_COPY_GGA:
+		{
+			Correct_copy_GGA(&NEO6, &GGA);
+			sm_stage = SM_CALC_SHECKSUM;
+		} break;
+
+	//***********************************************************
+
+		case SM_CALC_SHECKSUM:
+		{
+			result = Calc_SheckSum_GGA(&GGA, &CS);
+			if ( result == R_OK )
+			{
+				sm_stage = SM_GET_TIME_FROM_GGA;
+			}
+			else
+			{
+				sm_stage = SM_TIME_INCREMENT;
+			}
+		} break;
+
+	//***********************************************************
+
+		case SM_GET_TIME_FROM_GGA:
+		{
+			Get_time_from_GGA_string(&GGA, &Time);
+			sm_stage = SM_TIME_INCREMENT;
+		} break;
+
+	//***********************************************************
+
+		case SM_FORCE_COPY_GGA:
+		{
+			Force_copy_GGA(&NEO6, &GGA);
+			sm_stage = SM_TIME_INCREMENT;
+		} break;
+
+	//***********************************************************
+
+		case SM_TIME_INCREMENT:
+		{
+			Increment_time(&Time);
+			sm_stage = SM_PREPARE_FILENAME;
+		} break;
+
+	//***********************************************************
+
+		case SM_PREPARE_FILENAME:
+		{
+			Prepere_filename(&CS, &Time, &SD);
+			sm_stage = SM_WRITE_SDCARD;
+		} break;
+		//***********************************************************
+
+		case SM_WRITE_SDCARD:
+		{
+			HAL_IWDG_Refresh(&hiwdg);
+			Write_SD_card(&GGA, &SD);
+			sm_stage = SM_PRINT;
+		} break;
+		//***********************************************************
+
+		case SM_PRINT:
+		{
+			Print(&NEO6, &GGA, &CS, &Time, &SD);
+			sm_stage = SM_FINISH;
+		} break;
+		//***********************************************************
+
+		case SM_FINISH:
+		{
+			//HAL_GPIO_WritePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin, GPIO_PIN_RESET);
+			time_write_to_SD_flag  = 0 ;
+			sm_stage = SM_START;
+		} break;
+		//***********************************************************
+
+		case SM_ERROR_HANDLER:
+		{
+			LCD_SetCursor(0, 0);
+			sprintf(DebugString,"Buf empty. L= %d\r\n", NEO6.length_int);
+			HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+			LCD_Printf("%s", DebugString);
+			NEO6.length_int = 0;
+
+			sm_stage = SM_FINISH;
+		} break;
+		//***********************************************************
+
+		case SM_SHUTDOWN:
+		{
+			TIM_Stop();
+			ShutDown();
+			shudown_button_pressed_flag = 0;
+			sm_stage = SM_START;
+		} break;
+		//***********************************************************
+
+		case SM_READ_FROM_SDCARD:
+		{
+			Read_SD_card();
+			time_read_from_SD_u8 = 0;
+			sm_stage = SM_START;
+		} break;
+		//***********************************************************
+
+		default:
+		{
+			sm_stage = SM_START;
+		} break;
+	}	//			switch (sm_stage)
+}
+//***********************************************************
+
 void Print(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd)
 {
 	LCD_SetCursor(0, 95*(_time->seconds_int%2));
@@ -220,6 +464,93 @@ void Force_copy_GGA(NEO6_struct * _neo6, GGA_struct * _gga)
 void Correct_copy_GGA(NEO6_struct * _neo6, GGA_struct * _gga)
 {
 	memcpy(_gga->string, &_neo6->string[_gga->Neo6_start], _gga->length );
+}
+
+//***********************************************************
+
+
+void Clear_variables(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs)
+{
+	_gga->Neo6_start 		= 0;
+	_gga->Neo6_end   		= 0;
+	_gga->beginning_chars	= 0;
+	_gga->ending_char		= 0;
+	_gga->length = 0;
+
+	_cs->calc_u8 		= 0;
+	_cs->glue_u8 		= 0;
+	_cs->status_flag 	= 0;
+
+	_neo6->length_int = 0;
+}
+
+//***********************************************************
+
+void Read_SD_card(void)
+{
+	sprintf(DebugString,"Start read SD\r\n");
+	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+
+	fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
+	if (fres == FR_OK)
+	{
+		sprintf(DebugString,"st: \r\n");
+		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+
+			char buff[200];
+			LCD_SetCursor(0, 0);
+			LCD_FillScreen(0x0000);
+			/* Read from file */
+			while (f_gets(buff, 200, &USERFile))
+			{
+				LCD_Printf(buff);
+				sprintf(DebugString,"%s\r\n", buff);
+				HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+			}
+		f_close(&USERFile);	/* Close file */
+	}
+	else
+	{
+		sprintf(DebugString,"6) read from SD FAILED\r\n");
+		HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+	}
+
+	sprintf(DebugString,"7) END read from SD.\r\n");
+	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+}
+
+//***********************************************************
+
+void Prepere_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd)
+{
+	char file_name_char[FILE_NAME_SIZE];
+	int file_name_int = _time->hour_int*10000 + _time->minutes_int*100 + 12*(_time->seconds_int/12);
+	sprintf(file_name_char,"%06d_%d.txt", file_name_int, (int)_cs->status_flag);
+	int len = strlen(file_name_char) + 1;
+	char PathString[len];
+	snprintf(PathString, len,"%s", file_name_char);
+
+	TCHAR *f_tmp = _sd->filename;
+	char *s_tmp = PathString;
+	while(*s_tmp)
+	 *f_tmp++ = (TCHAR)*s_tmp++;
+	*f_tmp = 0;
+}
+
+//***********************************************************
+void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * _rx_buffer)
+{
+  	uint32_t rx_count = RingBuffer_DMA_Count(_rx_buffer);
+	while ((rx_count--) && (time_write_to_SD_flag == 0))
+	{
+		_neo6->string[_neo6->length_int] = RingBuffer_DMA_GetByte(_rx_buffer);
+		_neo6->length_int++;
+		if (_neo6->length_int > MAX_CHAR_IN_NEO6)
+		{
+			time_write_to_SD_flag = 1;
+			return;
+		}
+	} // end while rx_count
 }
 
 //***********************************************************

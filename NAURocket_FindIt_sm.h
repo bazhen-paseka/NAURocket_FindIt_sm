@@ -118,9 +118,19 @@
 	//***********************************************************
 
 	FRESULT fres;
+	GPS_state_machine sm_stage;
+	RESULT_ENUM result;
+	Time_struct Time;
+	GGA_struct GGA;
+	NEO6_struct NEO6;
+	CheckSum_struct CS;
+	SD_Card_struct SD;
+	RingBuffer_DMA rx_buffer;
 
 	//***********************************************************
 
+	void NAURocket_FindIt_Init (void);
+	void NAURocket_FindIt_Main (void);
 	void Print(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd);
 	void TIM_Start(void);
 	void TIM_Stop(void);
@@ -134,6 +144,10 @@
 	void Beep(void);
 	void Force_copy_GGA(NEO6_struct * _neo6, GGA_struct * _gga);
 	void Correct_copy_GGA(NEO6_struct * _neo6, GGA_struct * _gga);
+	void Clear_variables(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs);
+	void Read_SD_card(void);
+	void Prepere_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd);
+	void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * buffer);
 
 
 #endif 	//	NAUROCKET_FINDIT_SM_H_INCLUDED
