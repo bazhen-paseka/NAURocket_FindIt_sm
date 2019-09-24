@@ -20,7 +20,7 @@ void NAURocket_FindIt_Init (void)
 
 	sprintf(DebugString,"\r\n\r\n");
 	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
-	sprintf(DebugString,"NAU_Rocket Find_It\r\n2019 v2.0.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAU_Rocket Find_It\r\n2019 v2.1.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
 
