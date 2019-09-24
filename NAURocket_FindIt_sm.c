@@ -86,12 +86,11 @@ void NAURocket_FindIt_Main (void)
 		{
 			if (FLAG.end_of_UART_packet == 1)
 			{
-				FLAG.received_packet_cnt_u32++;
 				TIM3_end_of_packet_Stop();
 				if (NEO6.length_int > NEO6_LENGTH_MIN)
 				{
-					//HAL_GPIO_TogglePin(TEST_PIN_GPIO_Port, TEST_PIN_Pin);
-					HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
+					FLAG.received_packet_cnt_u32++;
 					TIM4_no_signal_Reset();
 					sm_stage = SM_FIND_GGA;
 					break;
@@ -116,11 +115,12 @@ void NAURocket_FindIt_Main (void)
 				sm_stage = SM_FINISH;
 				break;
 			}
-//			if (time_read_from_SD_u8 == 1)
-//			{
-//				sm_stage =SM_READ_FROM_SDCARD;
-//				break;
-//			}
+
+				//	if (time_read_from_SD_u8 == 1)
+				//	{
+				//		sm_stage =SM_READ_FROM_SDCARD;
+				//		break;
+				//	}
 			sm_stage = SM_READ_FROM_RINGBUFFER;
 		} break;
 	//***********************************************************
@@ -178,7 +178,9 @@ void NAURocket_FindIt_Main (void)
 		case SM_WRITE_SDCARD:
 		{
 			HAL_IWDG_Refresh(&hiwdg);
+			//HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_SET);
 			Write_SD_card(&GGA, &SD);
+			//HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_RESET);
 			sm_stage = SM_PRINT_ALL_INFO;
 		} break;
 		//***********************************************************
@@ -192,8 +194,8 @@ void NAURocket_FindIt_Main (void)
 
 		case SM_FINISH:
 		{
-			HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_RESET);
 			FLAG.end_of_UART_packet  = 0 ;
+			HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
 			sm_stage = SM_START;
 		} break;
 		//***********************************************************
@@ -241,7 +243,10 @@ void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _c
 	sprintf(DebugString,"%s", _gga->string);
 
 	HAL_UART_Transmit(&huart5, (uint8_t *)DebugString, strlen(DebugString), 100);
+
+HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_SET);
 	LCD_Printf("%s", DebugString);
+HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_RESET);
 
 	sprintf(DebugString,"%d/%d/%d/cs%d; pct: %d/%d/%d; %s; SD_write: %d\r\n",
 								_gga->Neo6_start,
@@ -259,7 +264,11 @@ void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _c
 								_sd->filename,
 								_sd->write_status);
 	LCD_SetCursor(0, 200);
+
+HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_SET);
 	LCD_Printf("%s", DebugString);
+HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_RESET);
+
 }
 //***********************************************************
 
