@@ -60,7 +60,6 @@
 	#define	TIMEZONE				3
 	#define	DEBUG_STRING_SIZE		650
 
-
 	//***********************************************************
 
 	typedef struct
@@ -129,8 +128,6 @@
 
 	//***********************************************************
 
-//	char DebugString[DEBUG_STRING_SIZE];
-
 //***********************************************************
 
 	FRESULT fres;
@@ -144,7 +141,6 @@
 	RingBuffer_DMA rx_buffer;
 	Flags_struct FLAG;
 	Debug_struct DebugH;
-
 
 //***********************************************************
 
