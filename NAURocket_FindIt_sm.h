@@ -15,6 +15,7 @@
 	#include <string.h>
 	#include "lcd.h"
 	#include "ringbuffer_dma.h"
+	#include "NAUR_FI_f103_config.h"
 
 //***********************************************************
 
@@ -58,6 +59,14 @@
 
 	#define	TIMEZONE				3
 	#define	DEBUG_STRING_SIZE		650
+
+
+	//***********************************************************
+
+	typedef struct
+	{
+		UART_HandleTypeDef *uart;
+	}	Debug_struct;
 
 	//***********************************************************
 
@@ -134,6 +143,8 @@
 	SD_Card_struct SD;
 	RingBuffer_DMA rx_buffer;
 	Flags_struct FLAG;
+	Debug_struct DebugH;
+
 
 //***********************************************************
 
