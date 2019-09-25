@@ -52,20 +52,21 @@ void NAURocket_FindIt_Init (void)
 	FATFS_SPI_Init(&hspi2);	/* Initialize SD Card low level SPI driver */
 #endif
 
-	if (f_mount(&USERFatFS, "0:", 1) != FR_OK)	/* try to mount SDCARD */
+	fres = f_mount(&USERFatFS, "0:", 1);	/* try to mount SDCARD */
+	if (fres == FR_OK)
 	{
-		f_mount(NULL, "0:", 0);			/* Unmount SDCARD */
-		Error_Handler();
-		sprintf(DebugString,"\r\nSD-card_mount - Failed \r\n");
+		sprintf(DebugString,"\r\nSD-card mount - Ok \r\n");
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
-		HAL_Delay(1000);
 	}
 	else
 	{
-		sprintf(DebugString,"\r\nSD-card_mount - Ok \r\n");
+		f_mount(NULL, "0:", 0);			/* Unmount SDCARD */
+		Error_Handler();
+		sprintf(DebugString,"\r\nSD-card_mount - Failed %d \r\n", fres);
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
+		HAL_Delay(1000);
 	}
 
 	////// не знайщов HAL_DMA_STATE_ERROR
@@ -480,8 +481,8 @@ void ShutDown(void)
 
 void Write_SD_card(GGA_struct * _gga, SD_Card_struct * _sd)
 {
-	// f406 fres = f_open(&USERFile, _sd->filename, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
-	fres = f_open(&USERFile, _sd->filename, FA_OPEN_ALWAYS | FA_WRITE );			/* Try to open file */
+	fres = f_open(&USERFile, _sd->filename, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
+	//fres = f_open(&USERFile, _sd->filename, FA_OPEN_ALWAYS | FA_WRITE );			/* Try to open file */
 	_sd->write_status = fres;
 	if (fres == FR_OK)
 	{
