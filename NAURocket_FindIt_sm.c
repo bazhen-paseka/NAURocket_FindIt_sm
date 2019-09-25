@@ -46,7 +46,12 @@ void NAURocket_FindIt_Init (void)
 	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
 	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
 
+#if (NAUR_FI_F446 == 1)
 	FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
+#elif (NAUR_FI_F103 == 1)
+	FATFS_SPI_Init(&hspi2);	/* Initialize SD Card low level SPI driver */
+#endif
+
 	if (f_mount(&USERFatFS, "0:", 1) != FR_OK)	/* try to mount SDCARD */
 	{
 		f_mount(NULL, "0:", 0);			/* Unmount SDCARD */
@@ -112,8 +117,6 @@ void NAURocket_FindIt_Main (void)
 				TIM3_end_of_packet_Stop();
 				if (NEO6.length_int > NEO6_LENGTH_MIN)
 				{
-					HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_SET);
-					HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_SET);
 					HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
 					FLAG.received_packet_cnt_u32++;
 					TIM4_no_signal_Reset();
@@ -218,8 +221,6 @@ void NAURocket_FindIt_Main (void)
 		{
 			FLAG.end_of_UART_packet  = 0 ;
 			HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(TEST_PC5_GPIO_Port, TEST_PC5_Pin, GPIO_PIN_RESET);
-
 			sm_stage = SM_START;
 		} break;
 		//***********************************************************
@@ -266,10 +267,8 @@ void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _c
 	sprintf(DebugString,"%s", _gga->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-	HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_SET);
 	LCD_SetCursor(0, 95*(_time->seconds_int%2));
 	LCD_Printf("%s", DebugString);
-	HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_RESET);
 
 	sprintf(DebugString,"%d/%d/%d/cs%d; pct: %d/%d/%d; %s; SD_write: %d\r\n",
 								_gga->Neo6_start,
@@ -287,10 +286,10 @@ void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _c
 								_sd->filename,
 								_sd->write_status);
 
-	HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_SET);
+
 	LCD_SetCursor(0, 200);
 	LCD_Printf("%s", DebugString);
-	HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_RESET);
+
 }
 //***********************************************************
 
@@ -566,7 +565,7 @@ void Read_SD_card(void)
 			{
 				LCD_Printf(buff);
 				sprintf(DebugString,"%s\r\n", buff);
-				//	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+				HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			}
 		f_close(&USERFile);	/* Close file */
 	}
@@ -610,7 +609,7 @@ void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flag
 			_flag->end_of_UART_packet = 1;
 			return;
 		}
-	} // end while rx_count
+	}
 }
 //***********************************************************
 
