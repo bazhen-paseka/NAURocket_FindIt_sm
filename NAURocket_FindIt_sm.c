@@ -70,9 +70,9 @@ void NAUR_Init (void)
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 #if (NAUR_FI_F446 == 1)
-	sprintf(DebugString,"NAUR Find It F446\r\n2019 v2.1.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F446\r\n2019 v2.2.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 #elif (NAUR_FI_F103 == 1)
-	sprintf(DebugString,"NAUR Find It F103\r\n2019 v2.1.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F103\r\n2019 v2.2.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 #endif
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
