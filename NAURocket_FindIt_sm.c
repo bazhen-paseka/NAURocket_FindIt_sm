@@ -88,6 +88,7 @@ void NAUR_Init (void)
 
 	do
 	{
+		static uint8_t try;
 		fres = f_mount(&USERFatFS, "", 1);	/* try to mount SDCARD */
 		if (fres == FR_OK)
 		{
@@ -99,10 +100,20 @@ void NAUR_Init (void)
 		{
 			f_mount(NULL, "", 0);			/* Unmount SDCARD */
 			Error_Handler();
-			sprintf(DebugString,"\r\nSDcard mount: Failed. Error: %d            \r\n", fres);
+			try++;
+			sprintf(DebugString,"%d)SDcard mount: Failed  Error: %d\r\n", try, fres);
 			HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			LCD_Printf("%s",DebugString);
 			HAL_Delay(1000);
+			if (try == 3)
+			{
+				LCD_SetCursor(0, 0);
+				#if (NAUR_FI_F446 == 1)
+					LCD_FillScreen(ILI92_BLACK);
+				#elif (NAUR_FI_F103 == 1)
+					LCD_FillScreen(ILI92_WHITE);
+				#endif
+			}
 		}
 	}
 	#if (DEBUG_MODE == 1)
