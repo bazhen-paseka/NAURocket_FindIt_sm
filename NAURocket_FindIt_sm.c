@@ -104,6 +104,7 @@ void NAUR_Init (void)
 			sprintf(DebugString,"%d)SDcard mount: Failed  Error: %d\r\n", try, fres);
 			HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			LCD_Printf("%s",DebugString);
+			Beep();
 			HAL_Delay(1000);
 			if (try == 3)
 			{
@@ -646,7 +647,7 @@ void Read_SD_card(void)
 
 void Prepare_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd)
 {
-	if (_sd->file_size > (CLUSTER_SIZE - GGA_STRING_MAX_SIZE ) )
+	if (_sd->file_size > (CLUSTER_SIZE - GGA_FORCE_LENGTH ) )
 	{
 		_sd->file_name_int = _time->hour_int*10000 + _time->minutes_int*100 + _time->seconds_int ;
 	}
@@ -705,6 +706,7 @@ void Print_No_signal(Flags_struct * _flag)
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_SetCursor(0, 95*(_flag->no_signal_cnt%2));
 	LCD_Printf("%s", DebugString);
+	Beep();
 	_flag->no_signal_cnt++;
 }
 //***********************************************************
