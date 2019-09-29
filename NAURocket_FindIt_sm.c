@@ -25,7 +25,7 @@
 	void Increment_time(Time_struct * _time);
 
 	void Prepare_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd);
-	void Write_SD_card(GGA_struct * _gga, SD_Card_struct * _sd);
+	void SDcard_Write(NEO6_struct * _neo6, GGA_struct * _gga, SD_Card_struct * _sd);
 
 	void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd, Flags_struct * _flag);
 	void Print_No_signal(Flags_struct * _flag);
@@ -39,8 +39,6 @@
 
 	void Beep(void);
 	void ShutDown(void);
-
-	void Read_SD_card(void);
 
 //***********************************************************
 //***********************************************************
@@ -199,11 +197,6 @@ void NAUR_Main (void)
 				break;
 			}
 
-				//	if (time_read_from_SD_u8 == 1)
-				//	{
-				//		sm_stage =SM_READ_FROM_SDCARD;
-				//		break;
-				//	}
 			sm_stage = SM_READ_FROM_RINGBUFFER;
 		} break;
 	//***********************************************************
@@ -260,7 +253,7 @@ void NAUR_Main (void)
 
 		case SM_WRITE_SDCARD:
 		{
-			Write_SD_card(&GGA, &SD);
+			SDcard_Write(&NEO6, &GGA, &SD);
 			sm_stage = SM_PRINT_ALL_INFO;
 		} break;
 		//***********************************************************
@@ -301,14 +294,6 @@ void NAUR_Main (void)
 		} break;
 		//***********************************************************
 
-		case SM_READ_FROM_SDCARD:
-		{
-//			Read_SD_card();
-//			time_read_from_SD_u8 = 0;
-//			sm_stage = SM_START;
-		} break;
-		//***********************************************************
-
 		default:
 		{
 			sm_stage = SM_START;
@@ -323,18 +308,17 @@ void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _c
 	snprintf(DebugString, _neo6->length_int+3,"\r\n%s", _neo6->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-//	sprintf(DebugString,"%d/%d/%d/cs%d; pct: %d/%d/%d; %s; SD_write: %d; size: %d\r\n",
-//								_gga->Neo6_start,
-//								_gga->Neo6_end,
-//								_gga->length,
-//								_cs->status_flag,
-//								(int)_flag->received_packet_cnt_u32,
-//								(int)_flag->correct_packet_cnt_u32,
-//								(int)(_flag->received_packet_cnt_u32 - _flag->correct_packet_cnt_u32),
-//								_sd->filename,
-//								_sd->write_status,
-//								(int)_sd->file_size);
-//	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	sprintf(DebugString,"%d/%d/%d/cs%d; pkt: %d/%d; %s; SD_write: %d; Fsize: %d\r\n",
+								_gga->Neo6_start,
+								_gga->Neo6_end,
+								_gga->length,
+								_cs->status_flag,
+								(int)_flag->received_packet_cnt_u32,
+								(int)(_flag->received_packet_cnt_u32 - _flag->correct_packet_cnt_u32),
+								_sd->filename,
+								_sd->write_status,
+								(int)_sd->file_size);
+	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 //	LCD_SetCursor(0, 95*(_time->seconds_int%2));
 //	sprintf(DebugString,"%s", _gga->string);
@@ -530,7 +514,7 @@ void ShutDown(void)
 	LCD_SetCursor(0, 0);
 	for (int i=4; i>=0; i--)
 	{
-		sprintf(DebugString,"SHUTDOWN %d\r\n", i);
+		sprintf(DebugString,"Remove SD-card! Left %d sec.\r\n", i);
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
 		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
@@ -549,8 +533,9 @@ void ShutDown(void)
 }
 //***********************************************************
 
-void Write_SD_card(GGA_struct * _gga, SD_Card_struct * _sd)
+void SDcard_Write(NEO6_struct * _neo6, GGA_struct * _gga, SD_Card_struct * _sd)
 {
+	snprintf(DebugString, _neo6->length_int+1,"%s", _neo6->string);
 #if (NAUR_FI_F446 == 1)
 	fres = f_open(&USERFile, _sd->filename, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
 #elif (NAUR_FI_F103 == 1)
@@ -561,7 +546,7 @@ void Write_SD_card(GGA_struct * _gga, SD_Card_struct * _sd)
 	if (fres == FR_OK)
 	{
 		HAL_IWDG_Refresh(&hiwdg);
-		f_printf(&USERFile, "%s", _gga->string);	/* Write to file */
+		f_printf(&USERFile, "%s", DebugString);	/* Write to file */
 		_sd->file_size = f_size(&USERFile);
 		f_close(&USERFile);	/* Close file */
 	}
@@ -624,46 +609,9 @@ void Clear_variables(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _
 }
 //***********************************************************
 
-void Read_SD_card(void)
-{
-	sprintf(DebugString,"Start read SD\r\n");
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-
-	fres = f_open(&USERFile, "tmm.txt", FA_OPEN_EXISTING | FA_READ);
-	if (fres == FR_OK)
-	{
-		sprintf(DebugString,"st: \r\n");
-		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-
-			char buff[200];
-			LCD_SetCursor(0, 0);
-			LCD_FillScreen(0x0000);
-			/* Read from file */
-			while (f_gets(buff, 200, &USERFile))
-			{
-				LCD_Printf(buff);
-				sprintf(DebugString,"%s\r\n", buff);
-				HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-			}
-		f_close(&USERFile);	/* Close file */
-	}
-	else
-	{
-		sprintf(DebugString,"6) read from SD FAILED\r\n");
-		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-	}
-
-	sprintf(DebugString,"7) END read from SD.\r\n");
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-}
-//***********************************************************
-
 void Prepare_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd)
 {
-	if (_sd->file_size > (CLUSTER_SIZE - GGA_FORCE_LENGTH ) )
-	{
-		_sd->file_name_int = _time->hour_int*10000 + _time->minutes_int*100 + _time->seconds_int ;
-	}
+	_sd->file_name_int = _time->hour_int*10000 + _time->minutes_int*100 + _time->seconds_int ;
 
 	char file_name_char[FILE_NAME_SIZE];
 	sprintf(file_name_char,"%06d_%d.txt", _sd->file_name_int, (int)_cs->status_flag);

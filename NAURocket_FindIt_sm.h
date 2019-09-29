@@ -39,8 +39,7 @@
 		SM_PRINT_ALL_INFO			,
 		SM_FINISH					,
 		SM_ERROR_HANDLER			,
-		SM_SHUTDOWN					,
-		SM_READ_FROM_SDCARD
+		SM_SHUTDOWN
 	} GPS_state_machine;
 
 	//***********************************************************
