@@ -11,23 +11,13 @@
 //***********************************************************
 //***********************************************************
 
-	void Clear_variables(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Flags_struct * _flag, SD_Card_struct * _sd);
+	void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag, SD_Card_struct * _sd);
 	void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * buffer, Flags_struct * _flag);
 
-	uint8_t Find_Begin_of_GGA_string(NEO6_struct*, GGA_struct* );
-	uint8_t Find_End_of_GGA_string(NEO6_struct*, GGA_struct*);
-	uint8_t Calc_SheckSum_GGA(GGA_struct * _gga, CheckSum_struct * _cs, Flags_struct * _flag);
+	void Prepare_filename(SD_Card_struct * _sd);
+	void SDcard_Write(NEO6_struct * _neo6, SD_Card_struct * _sd);
 
-	void Copy_GGA_Force(NEO6_struct * _neo6, GGA_struct * _gga);
-	void Copy_GGA_Correct(NEO6_struct * _neo6, GGA_struct * _gga);
-
-	void Get_time_from_GGA_string(GGA_struct* , Time_struct * _time, SD_Card_struct * _sd);
-	void Increment_time(Time_struct * _time);
-
-	void Prepare_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd);
-	void SDcard_Write(NEO6_struct * _neo6, GGA_struct * _gga, SD_Card_struct * _sd);
-
-	void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd, Flags_struct * _flag);
+	void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag);
 	void Print_No_signal(Flags_struct * _flag);
 
 	void TIM3_end_of_packet_Start(void);
@@ -147,7 +137,7 @@ void NAUR_Main (void)
 	{
 		case SM_START:
 		{
-			Clear_variables(&NEO6, &GGA, &CS, &FLAG, &SD);
+			Clear_variables(&NEO6, &FLAG, &SD);
 			TIM3_end_of_packet_Reset();
 			TIM3_end_of_packet_Start();
 			sm_stage =SM_READ_FROM_RINGBUFFER;
@@ -170,23 +160,20 @@ void NAUR_Main (void)
 				TIM3_end_of_packet_Stop();
 				if (NEO6.length_int > NEO6_LENGTH_MIN)
 				{
-					//HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
-					FLAG.received_packet_cnt_u32++;
 					TIM4_no_signal_Reset();
-					sm_stage = SM_FIND_GGA;
+					sm_stage = SM_PREPARE_FILENAME;
 					break;
 				}
 				else
 				{
-					FLAG.end_of_UART_packet = 0;
-					sm_stage = SM_START;
+					sm_stage = SM_FINISH;
 					break;
 				}
 			}
 
 			if (FLAG.shudown_button_pressed == 1)
 			{
-				sm_stage = SM_SHUTDOWN;
+				ShutDown();
 				break;
 			}
 
@@ -201,69 +188,26 @@ void NAUR_Main (void)
 		} break;
 	//***********************************************************
 
-		case SM_FIND_GGA:
-		{
-			result = Find_Begin_of_GGA_string(&NEO6, &GGA);
-			if ( result == R_OK)
-			{
-				sm_stage = SM_FIND_ASTERISK;
-			}
-			else
-			{
-				Copy_GGA_Force(&NEO6, &GGA);
-				sm_stage = SM_PREPARE_FILENAME;
-			}
-		} break;
-	//***********************************************************
-
-		case SM_FIND_ASTERISK:
-		{
-			result = Find_End_of_GGA_string(&NEO6, &GGA);
-			if ( result == R_OK )
-			{
-				Copy_GGA_Correct(&NEO6, &GGA);
-				sm_stage = SM_CALC_SHECKSUM;
-			}
-			else
-			{
-				Copy_GGA_Force(&NEO6, &GGA);
-				sm_stage = SM_PREPARE_FILENAME;
-			}
-		} break;
-	//***********************************************************
-
-		case SM_CALC_SHECKSUM:
-		{
-			result = Calc_SheckSum_GGA(&GGA, &CS, &FLAG);
-			if ( result == R_OK )
-			{
-				Get_time_from_GGA_string(&GGA, &Time, &SD);
-			}
-			sm_stage = SM_PREPARE_FILENAME;
-		} break;
-	//***********************************************************
-
 		case SM_PREPARE_FILENAME:
 		{
-			Increment_time(&Time);
-			Prepare_filename(&CS, &Time, &SD);
+			Prepare_filename(&SD);
 			sm_stage = SM_WRITE_SDCARD;
 		} break;
 	//***********************************************************
 
 		case SM_WRITE_SDCARD:
 		{
-			SDcard_Write(&NEO6, &GGA, &SD);
+			SDcard_Write(&NEO6, &SD);
 			sm_stage = SM_PRINT_ALL_INFO;
 		} break;
-		//***********************************************************
+	//***********************************************************
 
 		case SM_PRINT_ALL_INFO:
 		{
-			Print_all_info(&NEO6, &GGA, &CS, &Time, &SD, &FLAG);
+			Print_all_info(&NEO6,&SD, &FLAG);
 			sm_stage = SM_FINISH;
 		} break;
-		//***********************************************************
+	//***********************************************************
 
 		case SM_FINISH:
 		{
@@ -271,28 +215,7 @@ void NAUR_Main (void)
 			//HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
 			sm_stage = SM_START;
 		} break;
-		//***********************************************************
-
-		case SM_ERROR_HANDLER:
-		{
-			LCD_SetCursor(0, 0);
-			sprintf(DebugString,"Buf empty. L= %d\r\n", NEO6.length_int);
-			HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-			LCD_Printf("%s", DebugString);
-			NEO6.length_int = 0;
-
-			sm_stage = SM_FINISH;
-		} break;
-		//***********************************************************
-
-		case SM_SHUTDOWN:
-		{
-			TIM3_end_of_packet_Stop();
-			ShutDown();
-			FLAG.shudown_button_pressed = 0;
-			sm_stage = SM_START;
-		} break;
-		//***********************************************************
+	//***********************************************************
 
 		default:
 		{
@@ -302,28 +225,19 @@ void NAUR_Main (void)
 }
 //***********************************************************
 
-void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd, Flags_struct * _flag)
+void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag)
 {
 	HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
 	snprintf(DebugString, _neo6->length_int+3,"\r\n%s", _neo6->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-	sprintf(DebugString,"%d/%d/%d/cs%d; pkt: %d/%d; %s; SD_write: %d; Fsize: %d\r\n",
-								_gga->Neo6_start,
-								_gga->Neo6_end,
-								_gga->length,
-								_cs->status_flag,
-								(int)_flag->received_packet_cnt_u32,
-								(int)(_flag->received_packet_cnt_u32 - _flag->correct_packet_cnt_u32),
-								_sd->filename,
-								_sd->write_status,
-								(int)_sd->file_size);
+	sprintf(DebugString,"\r\n>> File name:%s; size: %d; SD_write: %d\r\n",
+												_sd->file_name_char,
+												(int)_sd->file_size,
+												_sd->write_status		);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 //	LCD_SetCursor(0, 95*(_time->seconds_int%2));
-//	sprintf(DebugString,"%s", _gga->string);
-//	LCD_Printf("%s", DebugString);
-
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
 	uint8_t lcd_circle = _neo6->length_int / 254;
@@ -341,10 +255,6 @@ void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _c
 	LCD_Printf("%s", DebugString);
 
 	HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
-
-//	sprintf(DebugString,"%s SD_wr %d\r\n", _sd->filename, _sd->write_status);
-//	LCD_SetCursor(0, 200);
-//	LCD_Printf("%s", DebugString);
 }
 //***********************************************************
 
@@ -388,123 +298,6 @@ void TIM4_no_signal_Reset(void)
 }
 //***********************************************************
 
-
-void Increment_time(Time_struct * _time)
-{
-	if (_time->seconds_int < 59)
-	{
-		_time->seconds_int++;
-		return;
-	}
-
-	_time->seconds_int = 0;
-	if (_time->minutes_int < 59)
-	{
-		_time->minutes_int++;
-		return;
-	}
-
-	_time->minutes_int = 0;
-	_time->hour_int++;
-}
-//***********************************************************
-
-uint8_t Find_Begin_of_GGA_string(NEO6_struct* _neo6, GGA_struct* _gga )
-{
-	for (int i=2; i<= _neo6->length_int; i++)
-	{
-		if (memcmp(&_neo6->string[i-2], "GGA" ,3) == 0)
-		{
-			_gga->Neo6_start = i - 5;	//	$GPGGA
-			_gga->beginning_chars = 1;	//	012345
-			return 1;
-		}
-	}
-	return 0;
-}
-//***********************************************************
-
-uint8_t Find_End_of_GGA_string(NEO6_struct* _neo6, GGA_struct* _gga)
-{
-	if (_gga->beginning_chars == 0)
-	{
-		return 0;
-	}
-
-	for (int i=_gga->Neo6_start; i<=_neo6->length_int; i++)
-	{
-		if (_neo6->string[i] == '*')
-		{
-			_gga->Neo6_end = i + 5;
-			_gga->length = _gga->Neo6_end - _gga->Neo6_start;
-			if ((_gga->length < GGA_LENGTH_MIN) || (_gga->length > GGA_STRING_MAX_SIZE))
-			{
-				return 0;
-			}
-			_gga->ending_char = 1;
-			return 1;
-		}
-	}
-	return 0;
-}
-//***********************************************************
-
-void Get_time_from_GGA_string(GGA_struct * _gga, Time_struct * _time, SD_Card_struct * _sd)
-{
-	if (_time->updated_flag == 1)
-	{
-		return;
-	}
-
-	_time->updated_flag = 1;
-
-	#define TIME_SIZE	5
-	char time_string[TIME_SIZE];
-
-	memset(time_string,0,TIME_SIZE);
-
-	memcpy(time_string, &_gga->string[7], 2);
-	_time->hour_int = atoi(time_string) + TIMEZONE;
-
-	memcpy(time_string, &_gga->string[9], 2);
-	_time->minutes_int = atoi(time_string);
-
-	memcpy(time_string, &_gga->string[11], 2);
-	_time->seconds_int = atoi(time_string);
-
-	_sd->file_name_int = _time->hour_int*10000 + _time->minutes_int*100 + _time->seconds_int ;
-}
-//***********************************************************
-
-uint8_t Calc_SheckSum_GGA(GGA_struct * _gga, CheckSum_struct * _cs, Flags_struct * _flag)
-{
-	#define CS_SIZE	4
-	char cs_glue_string[CS_SIZE];
-
-	//	glue:
-
-	memset(cs_glue_string, 0, CS_SIZE);
-	memcpy(cs_glue_string, &_gga->string[_gga->length - 4], 2);
-	_cs->glue_u8 = strtol(cs_glue_string, NULL, 16);
-
-	//	calc:
-	_cs->calc_u8 = _gga->string[1];
-	for (int i=2; i<(_gga->length - 5); i++)
-	{
-		_cs->calc_u8 ^= _gga->string[i];
-	}
-
-	//	compare:
-	if (_cs->calc_u8 == _cs->glue_u8)
-	{
-		_cs->status_flag = 1;
-		_flag->correct_packet_cnt_u32++;
-		return 1;
-	}
-	return 0;
-}
-//***********************************************************
-
 void ShutDown(void)
 {
 #if (NAUR_FI_F446 == 1)
@@ -535,13 +328,13 @@ void ShutDown(void)
 }
 //***********************************************************
 
-void SDcard_Write(NEO6_struct * _neo6, GGA_struct * _gga, SD_Card_struct * _sd)
+void SDcard_Write(NEO6_struct * _neo6, SD_Card_struct * _sd)
 {
 	snprintf(DebugString, _neo6->length_int+1,"%s", _neo6->string);
 #if (NAUR_FI_F446 == 1)
-	fres = f_open(&USERFile, _sd->filename, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
+	fres = f_open(&USERFile, _sd->file_name_char, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
 #elif (NAUR_FI_F103 == 1)
-	fres = f_open(&USERFile, _sd->filename, FA_OPEN_ALWAYS | FA_WRITE);
+	fres = f_open(&USERFile, _sd->file_name_char, FA_OPEN_ALWAYS | FA_WRITE);
 	fres += f_lseek(&USERFile, f_size(&USERFile));
 #endif
 	_sd->write_status = fres;
@@ -571,57 +364,24 @@ void Beep (void)
 }
 //***********************************************************
 
-void Copy_GGA_Force(NEO6_struct * _neo6, GGA_struct * _gga)
+void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag, SD_Card_struct * _sd)
 {
-	char tmp_str[GGA_FORCE_LENGTH];
-	memset(tmp_str, 0, GGA_FORCE_LENGTH);
-	//memcpy(_gga->string, &_neo6->string[GGA_FORCE_START], GGA_FORCE_LENGTH    );
-	       memcpy(tmp_str, &_neo6->string[GGA_FORCE_START], GGA_FORCE_LENGTH - 2);
-	snprintf(_gga->string, GGA_FORCE_LENGTH + 1,"%s\r\n", tmp_str);
-}
-//***********************************************************
-
-void Copy_GGA_Correct(NEO6_struct * _neo6, GGA_struct * _gga)
-{
-	char tmp_str[GGA_STRING_MAX_SIZE];
-	memset(tmp_str, 0, GGA_STRING_MAX_SIZE);
-	//memcpy(_gga->string, &_neo6->string[_gga->Neo6_start], _gga->length    );
-	       memcpy(tmp_str, &_neo6->string[_gga->Neo6_start], _gga->length - 2);
-	snprintf(_gga->string, _gga->length + 1 ,"%s\r\n", tmp_str);
-
-}
-//***********************************************************
-
-void Clear_variables(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Flags_struct * _flag, SD_Card_struct * _sd)
-{
-	_gga->Neo6_start 		= 0;
-	_gga->Neo6_end   		= 0;
-	_gga->beginning_chars	= 0;
-	_gga->ending_char		= 0;
-	_gga->length = 0;
-
-	_cs->calc_u8 		= 0;
-	_cs->glue_u8 		= 0;
-	_cs->status_flag 	= 0;
-
 	_sd->write_status	= 0;
-
 	_neo6->length_int = 0;
 	_flag->no_signal = 0;
 }
 //***********************************************************
 
-void Prepare_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd)
+void Prepare_filename(SD_Card_struct * _sd)
 {
-	_sd->file_name_int = _time->hour_int*10000 + _time->minutes_int*100 + _time->seconds_int ;
-
+	_sd->file_name_int++;
 	char file_name_char[FILE_NAME_SIZE];
-	sprintf(file_name_char,"%06d_%d.txt", _sd->file_name_int, (int)_cs->status_flag);
+	sprintf(file_name_char,"%06d.txt", _sd->file_name_int);
 	int len = strlen(file_name_char) + 1;
 	char PathString[len];
 	snprintf(PathString, len,"%s", file_name_char);
 
-	TCHAR *f_tmp = _sd->filename;
+	TCHAR *f_tmp = _sd->file_name_char;
 	char *s_tmp = PathString;
 	while(*s_tmp)
 	 *f_tmp++ = (TCHAR)*s_tmp++;
@@ -645,19 +405,19 @@ void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flag
 }
 //***********************************************************
 
-void Update_flag_shudown_button_pressed(void)
+void Update_flag_Shudown_button_pressed(void)
 {
 	FLAG.shudown_button_pressed	= 1 ;
 }
 //***********************************************************
 
-void Update_flag_end_of_UART_packet(void)
+void Update_flag_End_of_UART_packet(void)
 {
 	FLAG.end_of_UART_packet = 1;
 }
 //***********************************************************
 
-void Update_No_Signal(void)
+void Update_No_signal(void)
 {
 	FLAG.no_signal = 1;
 }
@@ -665,20 +425,13 @@ void Update_No_Signal(void)
 
 void Print_No_signal(Flags_struct * _flag)
 {
-//	sprintf(DebugString,"%d)NO signal from GPS                                       \r\n", _flag->no_signal_cnt);
-//	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-//	LCD_SetCursor(0, 95*(_flag->no_signal_cnt%2));
-//	LCD_Printf("%s", DebugString);
-
-	sprintf(DebugString,"%d)NO signal from GPS\r\n", _flag->no_signal_cnt);
+	sprintf(DebugString,"NO signal from GPS\r\n");
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
+	//	LCD_SetCursor(0, 95*(_flag->no_signal_cnt%2));
 	LCD_Printf("%s", DebugString);
-
 	Beep();
-	_flag->no_signal_cnt++;
 }
-//***********************************************************
 //***********************************************************
 //***********************************************************
