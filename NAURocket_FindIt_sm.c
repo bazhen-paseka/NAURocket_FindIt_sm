@@ -68,9 +68,9 @@ void NAUR_Init (void)
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 #if (NAUR_FI_F446 == 1)
-	sprintf(DebugString,"NAUR Find It F446\r\n2019 v2.2.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F446\r\n2019 v2.3.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 #elif (NAUR_FI_F103 == 1)
-	sprintf(DebugString,"NAUR Find It F103\r\n2019 v2.2.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F103\r\n2019 v2.3.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 #endif
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
@@ -121,13 +121,13 @@ void NAUR_Init (void)
 		while (fres !=0);
 	#endif
 
-	////// не знайщов HAL_DMA_STATE_ERROR
-//		if (hdma_usart3_rx.State == HAL_DMA_STATE_ERROR)
-//		{
-//			HAL_UART_DMAStop(&huart3);
-//			HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);
-//		}
-  	//////
+	#if (NAUR_FI_F446 == 1)
+		if (hdma_usart3_rx.State == HAL_DMA_STATE_ERROR)
+		{
+			HAL_UART_DMAStop(&huart3);
+			HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);
+		}
+	#endif
 
 #if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
@@ -323,6 +323,8 @@ void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _c
 //	LCD_SetCursor(0, 95*(_time->seconds_int%2));
 //	sprintf(DebugString,"%s", _gga->string);
 //	LCD_Printf("%s", DebugString);
+
+	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
 	uint8_t lcd_circle = _neo6->length_int / 254;
 	char tmp_str[0xFF];
@@ -663,10 +665,17 @@ void Update_No_Signal(void)
 
 void Print_No_signal(Flags_struct * _flag)
 {
-	sprintf(DebugString,"%d)NO signal from GPS                                       \r\n", _flag->no_signal_cnt);
+//	sprintf(DebugString,"%d)NO signal from GPS                                       \r\n", _flag->no_signal_cnt);
+//	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+//	LCD_SetCursor(0, 95*(_flag->no_signal_cnt%2));
+//	LCD_Printf("%s", DebugString);
+
+	sprintf(DebugString,"%d)NO signal from GPS\r\n", _flag->no_signal_cnt);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-	LCD_SetCursor(0, 95*(_flag->no_signal_cnt%2));
+	LCD_FillScreen(ILI92_BLACK);
+	LCD_SetCursor(0, 0);
 	LCD_Printf("%s", DebugString);
+
 	Beep();
 	_flag->no_signal_cnt++;
 }
