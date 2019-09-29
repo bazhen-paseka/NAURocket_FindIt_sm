@@ -172,7 +172,7 @@ void NAUR_Main (void)
 				TIM3_end_of_packet_Stop();
 				if (NEO6.length_int > NEO6_LENGTH_MIN)
 				{
-					HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
+					//HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
 					FLAG.received_packet_cnt_u32++;
 					TIM4_no_signal_Reset();
 					sm_stage = SM_FIND_GGA;
@@ -275,7 +275,7 @@ void NAUR_Main (void)
 		case SM_FINISH:
 		{
 			FLAG.end_of_UART_packet  = 0 ;
-			HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
+			//HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
 			sm_stage = SM_START;
 		} break;
 		//***********************************************************
@@ -319,33 +319,46 @@ void NAUR_Main (void)
 
 void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd, Flags_struct * _flag)
 {
-	sprintf(DebugString,"%s", _gga->string);
+	HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
+	snprintf(DebugString, _neo6->length_int+3,"\r\n%s", _neo6->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-	LCD_SetCursor(0, 95*(_time->seconds_int%2));
+//	sprintf(DebugString,"%d/%d/%d/cs%d; pct: %d/%d/%d; %s; SD_write: %d; size: %d\r\n",
+//								_gga->Neo6_start,
+//								_gga->Neo6_end,
+//								_gga->length,
+//								_cs->status_flag,
+//								(int)_flag->received_packet_cnt_u32,
+//								(int)_flag->correct_packet_cnt_u32,
+//								(int)(_flag->received_packet_cnt_u32 - _flag->correct_packet_cnt_u32),
+//								_sd->filename,
+//								_sd->write_status,
+//								(int)_sd->file_size);
+//	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+
+//	LCD_SetCursor(0, 95*(_time->seconds_int%2));
+//	sprintf(DebugString,"%s", _gga->string);
+//	LCD_Printf("%s", DebugString);
+	LCD_SetCursor(0, 0);
+	uint8_t lcd_circle = _neo6->length_int / 254;
+	char tmp_str[0xFF];
+	for (int i = 0; i < lcd_circle; i++)
+	{
+		memcpy(tmp_str, &_neo6->string[i*254], 255-1);
+		snprintf(DebugString, 255,"%s", tmp_str);
+		LCD_Printf("%s", DebugString);
+	}
+	uint8_t tmp_ctr_size = _neo6->length_int - 254 * lcd_circle;
+
+	memcpy(tmp_str, &_neo6->string[lcd_circle*254], tmp_ctr_size);
+	snprintf(DebugString, tmp_ctr_size + 1, "%s", tmp_str);
 	LCD_Printf("%s", DebugString);
 
-	sprintf(DebugString,"%d/%d/%d/cs%d; pct: %d/%d/%d; %s; SD_write: %d; size: %d\r\n",
-								_gga->Neo6_start,
-								_gga->Neo6_end,
-								_gga->length,
-								_cs->status_flag,
-								(int)_flag->received_packet_cnt_u32,
-								(int)_flag->correct_packet_cnt_u32,
-								(int)(_flag->received_packet_cnt_u32 - _flag->correct_packet_cnt_u32),
-								_sd->filename,
-								_sd->write_status,
-								(int)_sd->file_size);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
 
-	sprintf(DebugString,"%s SD_wr %d\r\n",
-								_sd->filename,
-								_sd->write_status);
-
-
-	LCD_SetCursor(0, 200);
-	LCD_Printf("%s", DebugString);
-
+//	sprintf(DebugString,"%s SD_wr %d\r\n", _sd->filename, _sd->write_status);
+//	LCD_SetCursor(0, 200);
+//	LCD_Printf("%s", DebugString);
 }
 //***********************************************************
 
