@@ -15,6 +15,7 @@
 	#include <string.h>
 	#include "lcd.h"
 	#include "ringbuffer_dma.h"
+	#include "NAUR_FI_f103_config.h"
 
 //***********************************************************
 
@@ -38,18 +39,17 @@
 		SM_PRINT_ALL_INFO			,
 		SM_FINISH					,
 		SM_ERROR_HANDLER			,
-		SM_SHUTDOWN					,
-		SM_READ_FROM_SDCARD
+		SM_SHUTDOWN
 	} GPS_state_machine;
 
 	//***********************************************************
 
 	#define NEO6_LENGTH_MIN			160
-	#define	NEO6_MAX_LENGTH			650
-	#define MAX_CHAR_IN_NEO6		630
+	#define	NEO6_MAX_LENGTH			600
+	#define MAX_CHAR_IN_NEO6		590
 
 	#define GGA_STRING_MAX_SIZE 	99
-	#define GGA_FORCE_START			103
+	#define GGA_FORCE_START			(103-20)
 	#define GGA_FORCE_LENGTH		75
 	#define GGA_LENGTH_MIN			33
 
@@ -57,7 +57,14 @@
 	#define RX_BUFFER_SIZE 			550
 
 	#define	TIMEZONE				3
-	#define	DEBUG_STRING_SIZE		650
+	#define	DEBUG_STRING_SIZE		600
+
+	//***********************************************************
+
+	typedef struct
+	{
+		UART_HandleTypeDef *uart;
+	}	Debug_struct;
 
 	//***********************************************************
 
@@ -103,7 +110,9 @@
 	typedef struct
 	{
 		TCHAR 		filename[FILE_NAME_SIZE];
+		int			file_name_int;
 		FRESULT 	write_status;
+		DWORD		file_size;
 	}	SD_Card_struct;
 
 	//***********************************************************
@@ -120,8 +129,6 @@
 
 	//***********************************************************
 
-//	char DebugString[DEBUG_STRING_SIZE];
-
 //***********************************************************
 
 	FRESULT fres;
@@ -134,47 +141,18 @@
 	SD_Card_struct SD;
 	RingBuffer_DMA rx_buffer;
 	Flags_struct FLAG;
+	Debug_struct DebugH;
 
 //***********************************************************
 
-	void NAURocket_FindIt_Init (void);
-	void NAURocket_FindIt_Main (void);
-
-	void Clear_variables(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Flags_struct * _flag);
-	void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * buffer, Flags_struct * _flag);
-
-	uint8_t Find_Begin_of_GGA_string(NEO6_struct*, GGA_struct* );
-	uint8_t Find_End_of_GGA_string(NEO6_struct*, GGA_struct*);
-	uint8_t Calc_SheckSum_GGA(GGA_struct * _gga, CheckSum_struct * _cs, Flags_struct * _flag);
-
-	void Copy_GGA_Force(NEO6_struct * _neo6, GGA_struct * _gga);
-	void Copy_GGA_Correct(NEO6_struct * _neo6, GGA_struct * _gga);
-
-	void Get_time_from_GGA_string(GGA_struct* , Time_struct * _time);
-	void Increment_time(Time_struct *);
-
-	void Prepare_filename(CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd);
-	void Write_SD_card(GGA_struct * _gga, SD_Card_struct * _sd);
-
-	void Print_all_info(NEO6_struct * _neo6, GGA_struct * _gga, CheckSum_struct * _cs, Time_struct * _time, SD_Card_struct * _sd, Flags_struct * _flag);
-	void Print_No_signal(Flags_struct * _flag);
+	void NAUR_Init (void);
+	void NAUR_Main (void);
 
 	void Update_flag_shudown_button_pressed(void)	;
 	void Update_flag_end_of_UART_packet(void)	;
 	void Update_No_Signal(void);
 
-	void TIM3_end_of_packet_Start(void);
-	void TIM3_end_of_packet_Stop(void);
 	void TIM3_end_of_packet_Reset(void);
-
-	void TIM4_no_signal_Start(void);
-	void TIM4_no_signal_Stop(void);
-	void TIM4_no_signal_Reset(void);
-
-	void Beep(void);
-	void ShutDown(void);
-
-	void Read_SD_card(void);
 
 //***********************************************************
 #endif 	//	NAUROCKET_FINDIT_SM_H_INCLUDED
