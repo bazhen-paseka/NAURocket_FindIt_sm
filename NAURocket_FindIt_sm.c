@@ -412,12 +412,12 @@ void Increment_time(Time_struct * _time)
 
 uint8_t Find_Begin_of_GGA_string(NEO6_struct* _neo6, GGA_struct* _gga )
 {
-	for (int i=6; i<= _neo6->length_int; i++)
+	for (int i=2; i<= _neo6->length_int; i++)
 	{
-		if (memcmp(&_neo6->string[i-6], "$GPGGA," ,7) == 0)
+		if (memcmp(&_neo6->string[i-2], "GGA" ,3) == 0)
 		{
-			_gga->Neo6_start = i - 6;
-			_gga->beginning_chars = 1;
+			_gga->Neo6_start = i - 5;	//	$GPGGA
+			_gga->beginning_chars = 1;	//	012345
 			return 1;
 		}
 	}
