@@ -206,7 +206,7 @@ void NAUR_Main (void)
 
 		case SM_PREPARE_FILENAME:
 		{
-			HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(TEST_PN1_GPIO_Port, TEST_PN1_Pin, GPIO_PIN_SET);
 			Prepare_filename(&SD);
 			sm_stage = SM_WRITE_SDCARD;
 		} break;
@@ -228,7 +228,7 @@ void NAUR_Main (void)
 
 		case SM_FINISH:
 		{
-			HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(TEST_PN1_GPIO_Port, TEST_PN1_Pin, GPIO_PIN_RESET);
 			sm_stage = SM_START;
 		} break;
 	//***********************************************************
@@ -264,8 +264,8 @@ void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _f
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	}
 
-
 //	LCD_SetCursor(0, 95*(_time->seconds_int%2));
+#if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
 	uint8_t lcd_circle = _neo6->length_int / 254;
@@ -281,6 +281,15 @@ void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _f
 	memcpy(tmp_str, &_neo6->string[lcd_circle*254], tmp_ctr_size);
 	snprintf(DebugString, tmp_ctr_size + 1, "%s", tmp_str);
 	LCD_Printf("%s", DebugString);
+#elif (NAUR_FI_F103 == 1)
+	LCD_FillScreen(ILI92_WHITE);
+	LCD_SetCursor(0, 0);
+	char tmp_str[0xFF];
+	memcpy(tmp_str, &_neo6->string[0], 255-1);
+	snprintf(DebugString, 255,"%s", tmp_str);
+	LCD_Printf("%s", DebugString);
+#endif
+
 }
 //***********************************************************
 
@@ -482,7 +491,11 @@ void Print_No_signal(void)
 {
 	sprintf(DebugString,">> ## NO signal from GPS ##\r\n");
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+#if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
+#elif (NAUR_FI_F103 == 1)
+	LCD_FillScreen(ILI92_WHITE);
+#endif
 	LCD_SetCursor(0, 0);
 	LCD_Printf("%s", DebugString);
 	Beep();
