@@ -72,11 +72,11 @@ void NAUR_Init (void)
 	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
 	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
 
-#if (NAUR_FI_F446 == 1)
-	FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
-#elif (NAUR_FI_F103 == 1)
-	FATFS_SPI_Init(&hspi2);	/* Initialize SD Card low level SPI driver */
-#endif
+	#if (NAUR_FI_F446 == 1)
+		FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
+	#elif (NAUR_FI_F103 == 1)
+		FATFS_SPI_Init(&hspi2);	/* Initialize SD Card low level SPI driver */
+	#endif
 
 	static uint8_t try_u8;
 	do
@@ -114,14 +114,16 @@ void NAUR_Init (void)
 	#else
 		while ((fres !=0) && (try_u8 < 5));
 	#endif
+	//***********************************************************
 
 	#if (NAUR_FI_F446 == 1)
 		if (hdma_usart3_rx.State == HAL_DMA_STATE_ERROR)
-		{
-			HAL_UART_DMAStop(&huart3);
-			HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);
-		}
+			{
+				HAL_UART_DMAStop(&huart3);
+				HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);
+			}
 	#endif
+	//***********************************************************
 
 #if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
