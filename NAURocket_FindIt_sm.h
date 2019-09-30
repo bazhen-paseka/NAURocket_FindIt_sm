@@ -38,14 +38,12 @@
 	} GPS_state_machine;
 //***********************************************************
 
-	#define NEO6_LENGTH_MIN			160
 	#define	NEO6_MAX_LENGTH			600
-	#define MAX_CHAR_IN_NEO6		590
+	#define MAX_CHAR_IN_NEO6		(NEO6_MAX_LENGTH - 1)
 
-	#define FILE_NAME_SIZE 			25
+	#define FILE_NAME_SIZE 			 25
 	#define RX_BUFFER_SIZE 			600
 
-	#define	TIMEZONE				3
 	#define	DEBUG_STRING_SIZE		600
 
 	//***********************************************************
@@ -75,8 +73,10 @@
 	typedef struct
 	{
 		uint8_t 	end_of_UART_packet		;
+		uint8_t 	packet_overflow			;
 		uint8_t 	shudown_button_pressed	;
 		uint8_t		no_signal				;
+		uint8_t 	unbreakable_package		;
 	}	Flags_struct;
 //***********************************************************
 //***********************************************************
@@ -95,11 +95,12 @@
 	void NAUR_Init (void);
 	void NAUR_Main (void);
 
+	void Update_flag_End_of_UART_packet(void)		;
+	void Update_flag_No_signal(void)				;
+	void Update_flag_Unbreakable_package(void)		;
 	void Update_flag_Shudown_button_pressed(void)	;
-	void Update_flag_End_of_UART_packet(void)	;
-	void Update_No_signal(void);
 
-	void TIM3_end_of_packet_Reset(void);
+	void TIM3_end_of_packet_Reset(void)				;
 
 //***********************************************************
 #endif 	//	NAUROCKET_FINDIT_SM_H_INCLUDED

@@ -18,7 +18,11 @@
 	void SDcard_Write(NEO6_struct * _neo6, SD_Card_struct * _sd);
 
 	void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag);
-	void Print_No_signal(Flags_struct * _flag);
+	void Print_No_signal(void);
+
+	void TIM2_Unbreakable_package_Start(void);
+	void TIM2_Unbreakable_package_Stop(void);
+	void TIM2_Unbreakable_package_Reset(void);
 
 	void TIM3_end_of_packet_Start(void);
 	void TIM3_end_of_packet_Stop(void);
@@ -58,9 +62,9 @@ void NAUR_Init (void)
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 #if (NAUR_FI_F446 == 1)
-	sprintf(DebugString,"NAUR Find It F446\r\n2019 v2.3.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F446\r\n2019 lite3.0.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 #elif (NAUR_FI_F103 == 1)
-	sprintf(DebugString,"NAUR Find It F103\r\n2019 v2.3.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F103\r\n2019 lite3.0.0\r\nfor_debug UART5 115200/8-N-1\r\n");
 #endif
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
@@ -74,9 +78,9 @@ void NAUR_Init (void)
 	FATFS_SPI_Init(&hspi2);	/* Initialize SD Card low level SPI driver */
 #endif
 
+	static uint8_t try_u8;
 	do
 	{
-		static uint8_t try;
 		fres = f_mount(&USERFatFS, "", 1);	/* try to mount SDCARD */
 		if (fres == FR_OK)
 		{
@@ -88,27 +92,27 @@ void NAUR_Init (void)
 		{
 			f_mount(NULL, "", 0);			/* Unmount SDCARD */
 			Error_Handler();
-			try++;
-			sprintf(DebugString,"%d)SDcard mount: Failed  Error: %d\r\n", try, fres);
+			try_u8++;
+			sprintf(DebugString,"%d)SDcard mount: Failed  Error: %d\r\n", try_u8, fres);
 			HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			LCD_Printf("%s",DebugString);
 			Beep();
 			HAL_Delay(1000);
-			if (try == 3)
-			{
-				LCD_SetCursor(0, 0);
-				#if (NAUR_FI_F446 == 1)
-					LCD_FillScreen(ILI92_BLACK);
-				#elif (NAUR_FI_F103 == 1)
-					LCD_FillScreen(ILI92_WHITE);
-				#endif
-			}
+//			if (try_u8 == 3)
+//			{
+//				LCD_SetCursor(0, 0);
+//				#if (NAUR_FI_F446 == 1)
+//					LCD_FillScreen(ILI92_BLACK);
+//				#elif (NAUR_FI_F103 == 1)
+//					LCD_FillScreen(ILI92_WHITE);
+//				#endif
+//			}
 		}
 	}
 	#if (DEBUG_MODE == 1)
 		while (0);
 	#else
-		while (fres !=0);
+		while ((fres !=0) && (try_u8 < 5));
 	#endif
 
 	#if (NAUR_FI_F446 == 1)
@@ -124,7 +128,9 @@ void NAUR_Init (void)
 #elif (NAUR_FI_F103 == 1)
 	LCD_FillScreen(ILI92_WHITE);
 #endif
+	TIM2_Unbreakable_package_Start();
 	TIM4_no_signal_Start();
+
 	HAL_IWDG_Refresh(&hiwdg);
 }
 
@@ -140,6 +146,7 @@ void NAUR_Main (void)
 			Clear_variables(&NEO6, &FLAG, &SD);
 			TIM3_end_of_packet_Reset();
 			TIM3_end_of_packet_Start();
+			TIM2_Unbreakable_package_Reset();
 			sm_stage =SM_READ_FROM_RINGBUFFER;
 		} break;
 
@@ -158,28 +165,35 @@ void NAUR_Main (void)
 			if (FLAG.end_of_UART_packet == 1)
 			{
 				TIM3_end_of_packet_Stop();
-				if (NEO6.length_int > NEO6_LENGTH_MIN)
-				{
-					TIM4_no_signal_Reset();
-					sm_stage = SM_PREPARE_FILENAME;
-					break;
-				}
-				else
+				if (NEO6.length_int == 0)
 				{
 					sm_stage = SM_FINISH;
 					break;
 				}
+				TIM4_no_signal_Reset();
+				sm_stage = SM_PREPARE_FILENAME;
+				break;
+			}
+
+			if ((FLAG.packet_overflow == 1) || (FLAG.unbreakable_package == 1))
+			{
+				TIM3_end_of_packet_Stop();
+				TIM4_no_signal_Reset();
+				Beep();
+				sm_stage = SM_PREPARE_FILENAME;
+				break;
 			}
 
 			if (FLAG.shudown_button_pressed == 1)
 			{
 				ShutDown();
+				sm_stage = SM_FINISH;	//	but it must Reset by IWDT
 				break;
 			}
 
 			if (FLAG.no_signal == 1)
 			{
-				Print_No_signal(&FLAG);
+				Print_No_signal();
 				sm_stage = SM_FINISH;
 				break;
 			}
@@ -190,6 +204,7 @@ void NAUR_Main (void)
 
 		case SM_PREPARE_FILENAME:
 		{
+			HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_SET);
 			Prepare_filename(&SD);
 			sm_stage = SM_WRITE_SDCARD;
 		} break;
@@ -211,8 +226,7 @@ void NAUR_Main (void)
 
 		case SM_FINISH:
 		{
-			FLAG.end_of_UART_packet  = 0 ;
-			//HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(TEST_PC6_GPIO_Port, TEST_PC6_Pin, GPIO_PIN_RESET);
 			sm_stage = SM_START;
 		} break;
 	//***********************************************************
@@ -227,7 +241,6 @@ void NAUR_Main (void)
 
 void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag)
 {
-	HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_SET);
 	snprintf(DebugString, _neo6->length_int+3,"\r\n%s", _neo6->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
@@ -236,6 +249,19 @@ void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _f
 												(int)_sd->file_size,
 												_sd->write_status		);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+
+	if (FLAG.unbreakable_package == 1)
+	{
+		sprintf(DebugString,">> ## Unbreakable package ##\r\n");
+		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	}
+
+	if (FLAG.packet_overflow == 1)
+	{
+		sprintf(DebugString,">> ## Packet overflow ##\r\n");
+		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	}
+
 
 //	LCD_SetCursor(0, 95*(_time->seconds_int%2));
 	LCD_FillScreen(ILI92_BLACK);
@@ -253,8 +279,26 @@ void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _f
 	memcpy(tmp_str, &_neo6->string[lcd_circle*254], tmp_ctr_size);
 	snprintf(DebugString, tmp_ctr_size + 1, "%s", tmp_str);
 	LCD_Printf("%s", DebugString);
+}
+//***********************************************************
 
-	HAL_GPIO_WritePin(TEST_PA12_GPIO_Port, TEST_PA12_Pin, GPIO_PIN_RESET);
+void TIM2_Unbreakable_package_Start(void)
+{
+	HAL_TIM_Base_Start_IT(&htim2);
+	HAL_TIM_Base_Start(&htim2);
+}
+//***********************************************************
+
+void TIM2_Unbreakable_package_Stop(void)
+{
+	HAL_TIM_Base_Stop_IT(&htim2);
+	HAL_TIM_Base_Stop(&htim2);
+}
+//***********************************************************
+
+void TIM2_Unbreakable_package_Reset(void)
+{
+	TIM2->CNT = 0;
 }
 //***********************************************************
 
@@ -307,16 +351,15 @@ void ShutDown(void)
 #endif
 
 	LCD_SetCursor(0, 0);
-	for (int i=4; i>=0; i--)
+	for (int i=5; i>=0; i--)
 	{
 		sprintf(DebugString,"Remove SD-card! Left %d sec.\r\n", i);
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
-		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
-		HAL_Delay(800);
 		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
-		HAL_Delay(300);
-		//HAL_IWDG_Refresh(&hiwdg);
+		HAL_Delay(1000);
+		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
+		HAL_Delay(400);
 	}
 #if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
@@ -366,9 +409,13 @@ void Beep (void)
 
 void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag, SD_Card_struct * _sd)
 {
-	_sd->write_status	= 0;
-	_neo6->length_int = 0;
-	_flag->no_signal = 0;
+	_sd->write_status			= 0 ;
+	_neo6->length_int			= 0 ;
+
+	_flag->end_of_UART_packet	= 0 ;
+	_flag->no_signal	 		= 0 ;
+	_flag->unbreakable_package	= 0 ;
+	_flag->packet_overflow		= 0 ;
 }
 //***********************************************************
 
@@ -392,13 +439,13 @@ void Prepare_filename(SD_Card_struct * _sd)
 void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flags_struct * _flag)
 {
   	uint32_t rx_count = RingBuffer_DMA_Count(_rx_buffer);
-	while ((rx_count--) && (_flag->end_of_UART_packet == 0))
+	while (rx_count--)
 	{
 		_neo6->string[_neo6->length_int] = RingBuffer_DMA_GetByte(_rx_buffer);
 		_neo6->length_int++;
 		if (_neo6->length_int > MAX_CHAR_IN_NEO6)
 		{
-			_flag->end_of_UART_packet = 1;
+			_flag->packet_overflow = 1;
 			return;
 		}
 	}
@@ -417,21 +464,27 @@ void Update_flag_End_of_UART_packet(void)
 }
 //***********************************************************
 
-void Update_No_signal(void)
+void Update_flag_No_signal(void)
 {
 	FLAG.no_signal = 1;
 }
 //***********************************************************
 
-void Print_No_signal(Flags_struct * _flag)
+void Update_flag_Unbreakable_package(void)
 {
-	sprintf(DebugString,"NO signal from GPS\r\n");
+	FLAG.unbreakable_package = 1;
+}
+//***********************************************************
+
+void Print_No_signal(void)
+{
+	sprintf(DebugString,">> ## NO signal from GPS ##\r\n");
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
-	//	LCD_SetCursor(0, 95*(_flag->no_signal_cnt%2));
 	LCD_Printf("%s", DebugString);
 	Beep();
 }
+//***********************************************************
 //***********************************************************
 //***********************************************************
