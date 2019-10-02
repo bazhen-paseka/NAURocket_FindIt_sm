@@ -38,13 +38,13 @@
 	} GPS_state_machine;
 //***********************************************************
 
-	#define	NEO6_MAX_LENGTH			600
+	#define	NEO6_MAX_LENGTH			850
 	#define MAX_CHAR_IN_NEO6		(NEO6_MAX_LENGTH - 1)
 
 	#define FILE_NAME_SIZE 			 25
 	#define RX_BUFFER_SIZE 			600
 
-	#define	DEBUG_STRING_SIZE		600
+	#define	DEBUG_STRING_SIZE		850
 
 	//***********************************************************
 
