@@ -42,7 +42,7 @@
 	#define MAX_CHAR_IN_NEO6		(NEO6_MAX_LENGTH - 1)
 
 	#define FILE_NAME_SIZE 			 25
-	#define RX_BUFFER_SIZE 			600
+	#define RX_BUFFER_SIZE 			0xFF
 
 	#define	DEBUG_STRING_SIZE		850
 
