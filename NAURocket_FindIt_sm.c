@@ -4,34 +4,35 @@
 
 //***********************************************************
 
-	extern DMA_HandleTypeDef hdma_usart2_rx;
-	extern DMA_HandleTypeDef hdma_usart3_rx;
+	extern DMA_HandleTypeDef		hdma_usart2_rx;
+	extern DMA_HandleTypeDef		hdma_usart3_rx;
 
-	uint8_t rx_circular_buffer[4][RX_BUFFER_SIZE];
+	HAL_StatusTypeDef 				status_res;
+
+	uint8_t rx_circular_buffer[GPS_CH_QNT][RX_BUFFER_SIZE];
 	char DebugString[DEBUG_STRING_SIZE];
-	HAL_StatusTypeDef status_res;
 
 //***********************************************************
 //***********************************************************
 
-	void Clear_variables(GPS_struct * _neo6_1, GPS_struct * _neo6_2, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd);
-	void Read_from_RingBuffer(GPS_struct * _neo6, RingBuffer_DMA * buffer, Flags_struct * _flag);
+	void Clear_variables(GPS_struct * _gps_1, GPS_struct * _gps_2, SD_Card_struct * _sd);
+	void Read_from_RingBuffer(GPS_struct * _gps, RingBuffer_DMA * buffer);
 
 	void Prepare_filename(SD_Card_struct * _sd);
-	void SDcard_Write(GPS_struct * _neo6, SD_Card_struct * _sd);
+	void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd);
 
-	void Print_all_info(GPS_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag);
+	void Print_all_info(GPS_struct * _gps, SD_Card_struct * _sd);
 	void Print_No_signal(void);
 
 	void TIM5_Unbreakable_package_Start(void);
 	void TIM5_Unbreakable_package_Stop(void);
 	void TIM5_Unbreakable_package_Reset(void);
 
-	void TIM3_end_of_packet_Start(void);
-	void TIM3_end_of_packet_Stop(void);
+	void RTU_3_start(void);
+	void RTU_3_stop(void);
 
-	void TIM2_end_of_packet_Start(void);
-	void TIM2_end_of_packet_Stop(void);
+	void RTU_2_start(void);
+	void RTU_2_stop(void);
 
 	void TIM4_no_signal_Start(void);
 	void TIM4_no_signal_Stop(void);
@@ -156,6 +157,9 @@ void NAUR_Init (void)
 	#endif
 	//***********************************************************
 
+		GPS[2].channel = GPS_CH_2;
+		GPS[3].channel = GPS_CH_3;
+
 #if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
 #elif (NAUR_FI_F103 == 1)
@@ -176,13 +180,13 @@ void NAUR_Main (void)
 	{
 		case SM_START:
 		{
-			Clear_variables(&GPS[2], &GPS[3], &FLAG[2], &FLAG[3], &SD);
+			Clear_variables(&GPS[2], &GPS[3], &SD);
 
 			RTU_2_reset();
-			TIM3_end_of_packet_Start();
+			RTU_2_start();
 
 			RTU_3_reset();
-			TIM3_end_of_packet_Start();
+			RTU_3_start();
 
 			TIM5_Unbreakable_package_Reset();
 			sm_stage =SM_READ_FROM_RINGBUFFER;
@@ -192,8 +196,8 @@ void NAUR_Main (void)
 
 		case SM_READ_FROM_RINGBUFFER:
 		{
-			Read_from_RingBuffer(&GPS[3], &rx_buffer[3], &FLAG[3]);
-			Read_from_RingBuffer(&GPS[2], &rx_buffer[2], &FLAG[2]);
+			Read_from_RingBuffer(&GPS[3], &rx_buffer[3] );
+			Read_from_RingBuffer(&GPS[2], &rx_buffer[2] );
 			sm_stage = SM_CHECK_FLAGS;
 		} break;
 
@@ -201,9 +205,9 @@ void NAUR_Main (void)
 
 		case SM_CHECK_FLAGS:
 		{
-			if (FLAG[3].end_of_UART_packet == 1)
+			if (GPS[3].end_of_UART_packet == 1)
 			{
-				TIM3_end_of_packet_Stop();
+				RTU_3_stop();
 				if (GPS[3].length_int == 0)
 				{
 					sm_stage = SM_FINISH;
@@ -214,23 +218,23 @@ void NAUR_Main (void)
 				break;
 			}
 
-			if ((FLAG[3].packet_overflow == 1) || (FLAG[3].time_overflow_u8 == 1))
+			if ((GPS[3].packet_overflow == 1) || (GPS[3].time_overflow_u8 == 1))
 			{
-				TIM3_end_of_packet_Stop();
+				RTU_3_stop();
 				TIM4_no_signal_Reset();
 				Beep();
 				sm_stage = SM_PREPARE_FILENAME;
 				break;
 			}
 
-			if (FLAG[3].shudown_button_pressed == 1)
+			if (SD.shudown_button_pressed == 1)
 			{
 				ShutDown();
 				sm_stage = SM_FINISH;	//	but it must Reset by IWDT
 				break;
 			}
 
-			if (FLAG[3].no_signal == 1)
+			if (GPS[3].no_signal == 1)
 			{
 				Print_No_signal();
 				sm_stage = SM_FINISH;
@@ -257,7 +261,7 @@ void NAUR_Main (void)
 
 		case SM_PRINT_ALL_INFO:
 		{
-			Print_all_info(&GPS[3],&SD, &FLAG[3]);
+			Print_all_info(&GPS[3],&SD );
 			sm_stage = SM_FINISH;
 		} break;
 	//***********************************************************
@@ -276,9 +280,9 @@ void NAUR_Main (void)
 }
 //***********************************************************
 
-void Print_all_info(GPS_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag)
+void Print_all_info(GPS_struct * _gps, SD_Card_struct * _sd )
 {
-	snprintf(DebugString, _neo6->length_int+3,"\r\n%s", _neo6->string);
+	snprintf(DebugString, _gps->length_int+3,"\r\n%s", _gps->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	sprintf(DebugString,">> file_name:%s; size: %d; SD_write: %d\r\n",
@@ -287,13 +291,13 @@ void Print_all_info(GPS_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _fl
 												_sd->write_status		);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-	if (FLAG[3].time_overflow_u8 == 1)
+	if (GPS[3].time_overflow_u8 == 1)
 	{
 		sprintf(DebugString,">> ## Unbreakable package ##\r\n");
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	}
 
-	if (FLAG[3].packet_overflow == 1)
+	if (GPS[3].packet_overflow == 1)
 	{
 		sprintf(DebugString,">> ## Packet overflow ##\r\n");
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -303,24 +307,24 @@ void Print_all_info(GPS_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _fl
 #if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
-	uint8_t lcd_circle = _neo6->length_int / 254;
+	uint8_t lcd_circle = _gps->length_int / 254;
 	char tmp_str[0xFF];
 	for (int i = 0; i < lcd_circle; i++)
 	{
-		memcpy(tmp_str, &_neo6->string[i*254], 255-1);
+		memcpy(tmp_str, &_gps->string[i*254], 255-1);
 		snprintf(DebugString, 255,"%s", tmp_str);
 		LCD_Printf("%s", DebugString);
 	}
-	uint8_t tmp_ctr_size = _neo6->length_int - 254 * lcd_circle;
+	uint8_t tmp_ctr_size = _gps->length_int - 254 * lcd_circle;
 
-	memcpy(tmp_str, &_neo6->string[lcd_circle*254], tmp_ctr_size);
+	memcpy(tmp_str, &_gps->string[lcd_circle*254], tmp_ctr_size);
 	snprintf(DebugString, tmp_ctr_size + 1, "%s", tmp_str);
 	LCD_Printf("%s", DebugString);
 #elif (NAUR_FI_F103 == 1)
 	LCD_FillScreen(ILI92_WHITE);
 	LCD_SetCursor(0, 0);
 	char tmp_str[0xFF];
-	memcpy(tmp_str, &_neo6->string[0], 255-1);
+	memcpy(tmp_str, &_gps->string[0], 255-1);
 	snprintf(DebugString, 255,"%s", tmp_str);
 	LCD_Printf("%s", DebugString);
 #endif
@@ -331,7 +335,7 @@ void Print_all_info(GPS_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _fl
 void TIM5_Unbreakable_package_Start(void)
 {
 	HAL_TIM_Base_Start_IT(&htim5);
-	HAL_TIM_Base_Start(&htim5);
+	HAL_TIM_Base_Start   (&htim5);
 }
 //***********************************************************
 
@@ -348,42 +352,36 @@ void TIM5_Unbreakable_package_Reset(void)
 }
 //***********************************************************
 
-void TIM3_end_of_packet_Start(void)
-{
+void RTU_3_start(void) {
 	HAL_TIM_Base_Start_IT(&htim3);
-	HAL_TIM_Base_Start(&htim3);
+	HAL_TIM_Base_Start   (&htim3);
 }
 //***********************************************************
 
-void TIM3_end_of_packet_Stop(void)
-{
+void RTU_3_stop(void) {
 	HAL_TIM_Base_Stop_IT(&htim3);
-	HAL_TIM_Base_Stop(&htim3);
+	HAL_TIM_Base_Stop   (&htim3);
 }
 //***********************************************************
 
-void RTU_3_reset(void)
-{
+void RTU_3_reset(void) {
 	TIM3->CNT = 0;
 }
 //***********************************************************
 
-void TIM2_end_of_packet_Start(void)
-{
+void RTU_2_start(void){
 	HAL_TIM_Base_Start_IT(&htim2);
-	HAL_TIM_Base_Start(&htim2);
+	HAL_TIM_Base_Start   (&htim2);
 }
 //***********************************************************
 
-void TIM2_end_of_packet_Stop(void)
-{
+void RTU_2_stop(void) {
 	HAL_TIM_Base_Stop_IT(&htim2);
-	HAL_TIM_Base_Stop(&htim2);
+	HAL_TIM_Base_Stop   (&htim2);
 }
 //***********************************************************
 
-void RTU_2_reset(void)
-{
+void RTU_2_reset(void) {
 	TIM2->CNT = 0;
 }
 
@@ -391,14 +389,14 @@ void RTU_2_reset(void)
 void TIM4_no_signal_Start(void)
 {
 	HAL_TIM_Base_Start_IT(&htim4);
-	HAL_TIM_Base_Start(&htim4);
+	HAL_TIM_Base_Start   (&htim4);
 }
 //***********************************************************
 
 void TIM4_no_signal_Stop(void)
 {
 	HAL_TIM_Base_Stop_IT(&htim4);
-	HAL_TIM_Base_Stop(&htim4);
+	HAL_TIM_Base_Stop   (&htim4);
 }
 //***********************************************************
 
@@ -437,9 +435,9 @@ void ShutDown(void)
 }
 //***********************************************************
 
-void SDcard_Write(GPS_struct * _neo6, SD_Card_struct * _sd)
+void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd)
 {
-	snprintf(DebugString, _neo6->length_int+1,"%s", _neo6->string);
+	snprintf(DebugString, _gps->length_int+1,"%s", _gps->string);
 #if (NAUR_FI_F446 == 1)
 	fres = f_open(&USERFile, _sd->file_name_char, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
 #elif (NAUR_FI_F103 == 1)
@@ -473,22 +471,22 @@ void Beep (void)
 }
 //***********************************************************
 
-void Clear_variables(GPS_struct * _neo6_1, GPS_struct * _neo6_2, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd)
+void Clear_variables(GPS_struct * _gps_1, GPS_struct * _gps_2, SD_Card_struct * _sd)
 {
-	_sd->write_status			= 0 ;
+	_sd->write_status				= 0 ;
 
-	_neo6_1->length_int			= 0 ;
-	_neo6_2->length_int			= 0 ;
+	_gps_1->length_int				= 0 ;
+	_gps_2->length_int				= 0 ;
 
-	_flag_1->end_of_UART_packet		= 0 ;
-	_flag_1->no_signal	 			= 0 ;
-	_flag_1->time_overflow_u8	= 0 ;
-	_flag_1->packet_overflow		= 0 ;
+	_gps_1->end_of_UART_packet		= 0 ;
+	_gps_1->no_signal	 			= 0 ;
+	_gps_1->time_overflow_u8		= 0 ;
+	_gps_1->packet_overflow			= 0 ;
 
-	_flag_2->end_of_UART_packet		= 0 ;
-	_flag_2->no_signal	 			= 0 ;
-	_flag_2->time_overflow_u8	= 0 ;
-	_flag_2->packet_overflow		= 0 ;
+	_gps_2->end_of_UART_packet		= 0 ;
+	_gps_2->no_signal	 			= 0 ;
+	_gps_2->time_overflow_u8		= 0 ;
+	_gps_2->packet_overflow			= 0 ;
 }
 //***********************************************************
 
@@ -509,16 +507,16 @@ void Prepare_filename(SD_Card_struct * _sd)
 }
 //***********************************************************
 
-void Read_from_RingBuffer(GPS_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flags_struct * _flag)
+void Read_from_RingBuffer(GPS_struct * _gps, RingBuffer_DMA * _rx_buffer)
 {
   	uint32_t rx_count = RingBuffer_DMA_Count(_rx_buffer);
 	while (rx_count--)
 	{
-		_neo6->string[_neo6->length_int] = RingBuffer_DMA_GetByte(_rx_buffer);
-		_neo6->length_int++;
-		if (_neo6->length_int > MAX_CHAR_IN_GPS)
+		_gps->string[_gps->length_int] = RingBuffer_DMA_GetByte(_rx_buffer);
+		_gps->length_int++;
+		if (_gps->length_int > MAX_CHAR_IN_GPS)
 		{
-			_flag->packet_overflow = 1;
+			_gps->packet_overflow = 1;
 			return;
 		}
 	}
@@ -527,31 +525,31 @@ void Read_from_RingBuffer(GPS_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flags
 
 void Set_flag_Shudown_button_pressed(void)
 {
-	FLAG[3].shudown_button_pressed	= 1 ;
+	SD.shudown_button_pressed	= 1 ;
 }
 //***********************************************************
 
 void Set_flag_End_of_UART_3_packet(void)
 {
-	FLAG[3].end_of_UART_packet = 1;
+	GPS[3].end_of_UART_packet = 1;
 }
 //***********************************************************
 
 void Set_flag_End_of_UART_2_packet(void)
 {
-	FLAG[2].end_of_UART_packet = 1;
+	GPS[2].end_of_UART_packet = 1;
 }
 //***********************************************************
 
 void Set_flag_No_signal(void)
 {
-	FLAG[3].no_signal = 1;
+	GPS[3].no_signal = 1;
 }
 //***********************************************************
 
 void Set_flag_time_overflow_package(void)
 {
-	FLAG[3].time_overflow_u8 = 1;
+	GPS[3].time_overflow_u8 = 1;
 }
 //***********************************************************
 
