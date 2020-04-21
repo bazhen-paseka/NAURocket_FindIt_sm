@@ -23,9 +23,9 @@
 	void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag);
 	void Print_No_signal(void);
 
-	void TIM2_Unbreakable_package_Start(void);
-	void TIM2_Unbreakable_package_Stop(void);
-	void TIM2_Unbreakable_package_Reset(void);
+	void TIM5_Unbreakable_package_Start(void);
+	void TIM5_Unbreakable_package_Stop(void);
+	void TIM5_Unbreakable_package_Reset(void);
 
 	void TIM3_end_of_packet_Start(void);
 	void TIM3_end_of_packet_Stop(void);
@@ -158,7 +158,7 @@ void NAUR_Init (void)
 #elif (NAUR_FI_F103 == 1)
 	LCD_FillScreen(ILI92_WHITE);
 #endif
-	TIM2_Unbreakable_package_Start();
+	TIM5_Unbreakable_package_Start();
 	TIM4_no_signal_Start();
 
 	HAL_IWDG_Refresh(&hiwdg);
@@ -176,7 +176,7 @@ void NAUR_Main (void)
 			Clear_variables(&NEO6, &FLAG, &SD);
 			TIM3_end_of_packet_Reset();
 			TIM3_end_of_packet_Start();
-			TIM2_Unbreakable_package_Reset();
+			TIM5_Unbreakable_package_Reset();
 			sm_stage =SM_READ_FROM_RINGBUFFER;
 		} break;
 
@@ -319,23 +319,23 @@ void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _f
 }
 //***********************************************************
 
-void TIM2_Unbreakable_package_Start(void)
+void TIM5_Unbreakable_package_Start(void)
 {
-	HAL_TIM_Base_Start_IT(&htim2);
-	HAL_TIM_Base_Start(&htim2);
+	HAL_TIM_Base_Start_IT(&htim5);
+	HAL_TIM_Base_Start(&htim5);
 }
 //***********************************************************
 
-void TIM2_Unbreakable_package_Stop(void)
+void TIM5_Unbreakable_package_Stop(void)
 {
-	HAL_TIM_Base_Stop_IT(&htim2);
-	HAL_TIM_Base_Stop(&htim2);
+	HAL_TIM_Base_Stop_IT(&htim5);
+	HAL_TIM_Base_Stop   (&htim5);
 }
 //***********************************************************
 
-void TIM2_Unbreakable_package_Reset(void)
+void TIM5_Unbreakable_package_Reset(void)
 {
-	TIM2->CNT = 0;
+	TIM5->CNT = 0;
 }
 //***********************************************************
 
