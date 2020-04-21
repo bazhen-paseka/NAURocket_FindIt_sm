@@ -14,13 +14,13 @@
 //***********************************************************
 //***********************************************************
 
-	void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd);
-	void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * buffer, Flags_struct * _flag);
+	void Clear_variables(GPS_struct * _neo6_1, GPS_struct * _neo6_2, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd);
+	void Read_from_RingBuffer(GPS_struct * _neo6, RingBuffer_DMA * buffer, Flags_struct * _flag);
 
 	void Prepare_filename(SD_Card_struct * _sd);
-	void SDcard_Write(NEO6_struct * _neo6, SD_Card_struct * _sd);
+	void SDcard_Write(GPS_struct * _neo6, SD_Card_struct * _sd);
 
-	void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag);
+	void Print_all_info(GPS_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag);
 	void Print_No_signal(void);
 
 	void TIM5_Unbreakable_package_Start(void);
@@ -176,12 +176,12 @@ void NAUR_Main (void)
 	{
 		case SM_START:
 		{
-			Clear_variables(&NEO6, &FLAG[2], &FLAG[3], &SD);
+			Clear_variables(&GPS[2], &GPS[3], &FLAG[2], &FLAG[3], &SD);
 
-			TIM3_end_of_packet_Reset();
+			RTU_2_reset();
 			TIM3_end_of_packet_Start();
 
-			TIM3_end_of_packet_Reset();
+			RTU_3_reset();
 			TIM3_end_of_packet_Start();
 
 			TIM5_Unbreakable_package_Reset();
@@ -192,7 +192,8 @@ void NAUR_Main (void)
 
 		case SM_READ_FROM_RINGBUFFER:
 		{
-			Read_from_RingBuffer(&NEO6, &rx_buffer[3], &FLAG[3]);
+			Read_from_RingBuffer(&GPS[3], &rx_buffer[3], &FLAG[3]);
+			Read_from_RingBuffer(&GPS[2], &rx_buffer[2], &FLAG[2]);
 			sm_stage = SM_CHECK_FLAGS;
 		} break;
 
@@ -203,7 +204,7 @@ void NAUR_Main (void)
 			if (FLAG[3].end_of_UART_packet == 1)
 			{
 				TIM3_end_of_packet_Stop();
-				if (NEO6.length_int == 0)
+				if (GPS[3].length_int == 0)
 				{
 					sm_stage = SM_FINISH;
 					break;
@@ -213,7 +214,7 @@ void NAUR_Main (void)
 				break;
 			}
 
-			if ((FLAG[3].packet_overflow == 1) || (FLAG[3].unbreakable_package == 1))
+			if ((FLAG[3].packet_overflow == 1) || (FLAG[3].time_overflow_u8 == 1))
 			{
 				TIM3_end_of_packet_Stop();
 				TIM4_no_signal_Reset();
@@ -249,14 +250,14 @@ void NAUR_Main (void)
 
 		case SM_WRITE_SDCARD:
 		{
-			SDcard_Write(&NEO6, &SD);
+			SDcard_Write(&GPS[3], &SD);
 			sm_stage = SM_PRINT_ALL_INFO;
 		} break;
 	//***********************************************************
 
 		case SM_PRINT_ALL_INFO:
 		{
-			Print_all_info(&NEO6,&SD, &FLAG[3]);
+			Print_all_info(&GPS[3],&SD, &FLAG[3]);
 			sm_stage = SM_FINISH;
 		} break;
 	//***********************************************************
@@ -275,7 +276,7 @@ void NAUR_Main (void)
 }
 //***********************************************************
 
-void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag)
+void Print_all_info(GPS_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _flag)
 {
 	snprintf(DebugString, _neo6->length_int+3,"\r\n%s", _neo6->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -286,7 +287,7 @@ void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _f
 												_sd->write_status		);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-	if (FLAG[3].unbreakable_package == 1)
+	if (FLAG[3].time_overflow_u8 == 1)
 	{
 		sprintf(DebugString,">> ## Unbreakable package ##\r\n");
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -361,7 +362,7 @@ void TIM3_end_of_packet_Stop(void)
 }
 //***********************************************************
 
-void TIM3_end_of_packet_Reset(void)
+void RTU_3_reset(void)
 {
 	TIM3->CNT = 0;
 }
@@ -381,7 +382,7 @@ void TIM2_end_of_packet_Stop(void)
 }
 //***********************************************************
 
-void TIM2_end_of_packet_Reset(void)
+void RTU_2_reset(void)
 {
 	TIM2->CNT = 0;
 }
@@ -436,7 +437,7 @@ void ShutDown(void)
 }
 //***********************************************************
 
-void SDcard_Write(NEO6_struct * _neo6, SD_Card_struct * _sd)
+void SDcard_Write(GPS_struct * _neo6, SD_Card_struct * _sd)
 {
 	snprintf(DebugString, _neo6->length_int+1,"%s", _neo6->string);
 #if (NAUR_FI_F446 == 1)
@@ -472,19 +473,21 @@ void Beep (void)
 }
 //***********************************************************
 
-void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd)
+void Clear_variables(GPS_struct * _neo6_1, GPS_struct * _neo6_2, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd)
 {
 	_sd->write_status			= 0 ;
-	_neo6->length_int			= 0 ;
+
+	_neo6_1->length_int			= 0 ;
+	_neo6_2->length_int			= 0 ;
 
 	_flag_1->end_of_UART_packet		= 0 ;
 	_flag_1->no_signal	 			= 0 ;
-	_flag_1->unbreakable_package	= 0 ;
+	_flag_1->time_overflow_u8	= 0 ;
 	_flag_1->packet_overflow		= 0 ;
 
 	_flag_2->end_of_UART_packet		= 0 ;
 	_flag_2->no_signal	 			= 0 ;
-	_flag_2->unbreakable_package	= 0 ;
+	_flag_2->time_overflow_u8	= 0 ;
 	_flag_2->packet_overflow		= 0 ;
 }
 //***********************************************************
@@ -506,14 +509,14 @@ void Prepare_filename(SD_Card_struct * _sd)
 }
 //***********************************************************
 
-void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flags_struct * _flag)
+void Read_from_RingBuffer(GPS_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flags_struct * _flag)
 {
   	uint32_t rx_count = RingBuffer_DMA_Count(_rx_buffer);
 	while (rx_count--)
 	{
 		_neo6->string[_neo6->length_int] = RingBuffer_DMA_GetByte(_rx_buffer);
 		_neo6->length_int++;
-		if (_neo6->length_int > MAX_CHAR_IN_NEO6)
+		if (_neo6->length_int > MAX_CHAR_IN_GPS)
 		{
 			_flag->packet_overflow = 1;
 			return;
@@ -522,33 +525,33 @@ void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flag
 }
 //***********************************************************
 
-void Update_flag_Shudown_button_pressed(void)
+void Set_flag_Shudown_button_pressed(void)
 {
 	FLAG[3].shudown_button_pressed	= 1 ;
 }
 //***********************************************************
 
-void Update_flag_End_of_UART_3_packet(void)
+void Set_flag_End_of_UART_3_packet(void)
 {
 	FLAG[3].end_of_UART_packet = 1;
 }
 //***********************************************************
 
-void Update_flag_End_of_UART_2_packet(void)
+void Set_flag_End_of_UART_2_packet(void)
 {
 	FLAG[2].end_of_UART_packet = 1;
 }
 //***********************************************************
 
-void Update_flag_No_signal(void)
+void Set_flag_No_signal(void)
 {
 	FLAG[3].no_signal = 1;
 }
 //***********************************************************
 
-void Update_flag_Unbreakable_package(void)
+void Set_flag_time_overflow_package(void)
 {
-	FLAG[3].unbreakable_package = 1;
+	FLAG[3].time_overflow_u8 = 1;
 }
 //***********************************************************
 

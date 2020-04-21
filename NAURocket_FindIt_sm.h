@@ -38,8 +38,8 @@
 	} GPS_state_machine;
 //***********************************************************
 
-	#define	NEO6_MAX_LENGTH			850
-	#define MAX_CHAR_IN_NEO6		(NEO6_MAX_LENGTH - 1)
+	#define	GPS_MAX_LENGTH			850
+	#define MAX_CHAR_IN_GPS			(GPS_MAX_LENGTH - 1)
 
 	#define FILE_NAME_SIZE 			 25
 	#define RX_BUFFER_SIZE 			0xFF
@@ -56,9 +56,9 @@
 
 	typedef struct
 	{
-		char 		string[NEO6_MAX_LENGTH];
+		char 		string[GPS_MAX_LENGTH];
 		int 		length_int;
-	}	NEO6_struct;
+	}	GPS_struct;
 //***********************************************************
 
 	typedef struct
@@ -76,7 +76,7 @@
 		uint8_t 	packet_overflow			;
 		uint8_t 	shudown_button_pressed	;
 		uint8_t		no_signal				;
-		uint8_t 	unbreakable_package		;
+		uint8_t 	time_overflow_u8		;
 	}	Flags_struct;
 //***********************************************************
 //***********************************************************
@@ -84,7 +84,7 @@
 	FRESULT 				fres;
 	GPS_state_machine 		sm_stage;
 	RESULT_ENUM 			result;
-	NEO6_struct 			NEO6;
+	GPS_struct 			GPS[4];
 	SD_Card_struct 			SD;
 	RingBuffer_DMA 			rx_buffer[4];
 	Flags_struct 			FLAG[4];
@@ -95,12 +95,15 @@
 	void NAUR_Init (void);
 	void NAUR_Main (void);
 
-	void Update_flag_End_of_UART_packet(void)		;
-	void Update_flag_No_signal(void)				;
-	void Update_flag_Unbreakable_package(void)		;
-	void Update_flag_Shudown_button_pressed(void)	;
+	void Set_flag_End_of_UART_2_packet(void)		;
+	void Set_flag_End_of_UART_3_packet(void)		;
+	void Set_flag_No_signal(void)				;
+	void Set_flag_time_overflow_package(void)		;
+	void Set_flag_Shudown_button_pressed(void)	;
 
-	void TIM3_end_of_packet_Reset(void)				;
+	void RTU_2_reset(void)				;
+	void RTU_3_reset(void)				;
+
 
 //***********************************************************
 #endif 	//	NAUROCKET_FINDIT_SM_H_INCLUDED
