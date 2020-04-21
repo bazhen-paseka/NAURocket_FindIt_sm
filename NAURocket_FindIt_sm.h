@@ -86,7 +86,7 @@
 	RESULT_ENUM 			result;
 	NEO6_struct 			NEO6;
 	SD_Card_struct 			SD;
-	RingBuffer_DMA 			rx_buffer3;
+	RingBuffer_DMA 			rx_buffer[4];
 	Flags_struct 			FLAG;
 	Debug_struct 			DebugH;
 
