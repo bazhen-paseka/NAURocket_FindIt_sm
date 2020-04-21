@@ -2,6 +2,7 @@
 #define NAUROCKET_FINDIT_SM_H_INCLUDED
 
 /***********************************/
+#include <NAURocket_FindIt_local_config.h>
 #include "main.h"
 #include "dma.h"
 #include "fatfs.h"
@@ -15,8 +16,7 @@
 	#include <string.h>
 	#include "lcd.h"
 	#include "ringbuffer_dma.h"
-	#include "NAUR_FI_f103_config.h"
-
+	
 //***********************************************************
 
 	typedef enum
