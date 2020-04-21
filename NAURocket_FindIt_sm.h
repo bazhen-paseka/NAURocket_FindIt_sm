@@ -87,7 +87,7 @@
 	NEO6_struct 			NEO6;
 	SD_Card_struct 			SD;
 	RingBuffer_DMA 			rx_buffer[4];
-	Flags_struct 			FLAG;
+	Flags_struct 			FLAG[4];
 	Debug_struct 			DebugH;
 
 //***********************************************************

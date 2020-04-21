@@ -14,7 +14,7 @@
 //***********************************************************
 //***********************************************************
 
-	void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag, SD_Card_struct * _sd);
+	void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd);
 	void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * buffer, Flags_struct * _flag);
 
 	void Prepare_filename(SD_Card_struct * _sd);
@@ -29,6 +29,9 @@
 
 	void TIM3_end_of_packet_Start(void);
 	void TIM3_end_of_packet_Stop(void);
+
+	void TIM2_end_of_packet_Start(void);
+	void TIM2_end_of_packet_Stop(void);
 
 	void TIM4_no_signal_Start(void);
 	void TIM4_no_signal_Stop(void);
@@ -173,9 +176,14 @@ void NAUR_Main (void)
 	{
 		case SM_START:
 		{
-			Clear_variables(&NEO6, &FLAG, &SD);
+			Clear_variables(&NEO6, &FLAG[2], &FLAG[3], &SD);
+
 			TIM3_end_of_packet_Reset();
 			TIM3_end_of_packet_Start();
+
+			TIM3_end_of_packet_Reset();
+			TIM3_end_of_packet_Start();
+
 			TIM5_Unbreakable_package_Reset();
 			sm_stage =SM_READ_FROM_RINGBUFFER;
 		} break;
@@ -184,7 +192,7 @@ void NAUR_Main (void)
 
 		case SM_READ_FROM_RINGBUFFER:
 		{
-			Read_from_RingBuffer(&NEO6, &rx_buffer[3], &FLAG);
+			Read_from_RingBuffer(&NEO6, &rx_buffer[3], &FLAG[3]);
 			sm_stage = SM_CHECK_FLAGS;
 		} break;
 
@@ -192,7 +200,7 @@ void NAUR_Main (void)
 
 		case SM_CHECK_FLAGS:
 		{
-			if (FLAG.end_of_UART_packet == 1)
+			if (FLAG[3].end_of_UART_packet == 1)
 			{
 				TIM3_end_of_packet_Stop();
 				if (NEO6.length_int == 0)
@@ -205,7 +213,7 @@ void NAUR_Main (void)
 				break;
 			}
 
-			if ((FLAG.packet_overflow == 1) || (FLAG.unbreakable_package == 1))
+			if ((FLAG[3].packet_overflow == 1) || (FLAG[3].unbreakable_package == 1))
 			{
 				TIM3_end_of_packet_Stop();
 				TIM4_no_signal_Reset();
@@ -214,14 +222,14 @@ void NAUR_Main (void)
 				break;
 			}
 
-			if (FLAG.shudown_button_pressed == 1)
+			if (FLAG[3].shudown_button_pressed == 1)
 			{
 				ShutDown();
 				sm_stage = SM_FINISH;	//	but it must Reset by IWDT
 				break;
 			}
 
-			if (FLAG.no_signal == 1)
+			if (FLAG[3].no_signal == 1)
 			{
 				Print_No_signal();
 				sm_stage = SM_FINISH;
@@ -248,7 +256,7 @@ void NAUR_Main (void)
 
 		case SM_PRINT_ALL_INFO:
 		{
-			Print_all_info(&NEO6,&SD, &FLAG);
+			Print_all_info(&NEO6,&SD, &FLAG[3]);
 			sm_stage = SM_FINISH;
 		} break;
 	//***********************************************************
@@ -278,13 +286,13 @@ void Print_all_info(NEO6_struct * _neo6, SD_Card_struct * _sd, Flags_struct * _f
 												_sd->write_status		);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-	if (FLAG.unbreakable_package == 1)
+	if (FLAG[3].unbreakable_package == 1)
 	{
 		sprintf(DebugString,">> ## Unbreakable package ##\r\n");
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	}
 
-	if (FLAG.packet_overflow == 1)
+	if (FLAG[3].packet_overflow == 1)
 	{
 		sprintf(DebugString,">> ## Packet overflow ##\r\n");
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -356,6 +364,26 @@ void TIM3_end_of_packet_Stop(void)
 void TIM3_end_of_packet_Reset(void)
 {
 	TIM3->CNT = 0;
+}
+//***********************************************************
+
+void TIM2_end_of_packet_Start(void)
+{
+	HAL_TIM_Base_Start_IT(&htim2);
+	HAL_TIM_Base_Start(&htim2);
+}
+//***********************************************************
+
+void TIM2_end_of_packet_Stop(void)
+{
+	HAL_TIM_Base_Stop_IT(&htim2);
+	HAL_TIM_Base_Stop(&htim2);
+}
+//***********************************************************
+
+void TIM2_end_of_packet_Reset(void)
+{
+	TIM2->CNT = 0;
 }
 
 //***********************************************************
@@ -444,15 +472,20 @@ void Beep (void)
 }
 //***********************************************************
 
-void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag, SD_Card_struct * _sd)
+void Clear_variables(NEO6_struct * _neo6, Flags_struct * _flag_1, Flags_struct * _flag_2, SD_Card_struct * _sd)
 {
 	_sd->write_status			= 0 ;
 	_neo6->length_int			= 0 ;
 
-	_flag->end_of_UART_packet	= 0 ;
-	_flag->no_signal	 		= 0 ;
-	_flag->unbreakable_package	= 0 ;
-	_flag->packet_overflow		= 0 ;
+	_flag_1->end_of_UART_packet		= 0 ;
+	_flag_1->no_signal	 			= 0 ;
+	_flag_1->unbreakable_package	= 0 ;
+	_flag_1->packet_overflow		= 0 ;
+
+	_flag_2->end_of_UART_packet		= 0 ;
+	_flag_2->no_signal	 			= 0 ;
+	_flag_2->unbreakable_package	= 0 ;
+	_flag_2->packet_overflow		= 0 ;
 }
 //***********************************************************
 
@@ -491,25 +524,31 @@ void Read_from_RingBuffer(NEO6_struct * _neo6, RingBuffer_DMA * _rx_buffer, Flag
 
 void Update_flag_Shudown_button_pressed(void)
 {
-	FLAG.shudown_button_pressed	= 1 ;
+	FLAG[3].shudown_button_pressed	= 1 ;
 }
 //***********************************************************
 
-void Update_flag_End_of_UART_packet(void)
+void Update_flag_End_of_UART_3_packet(void)
 {
-	FLAG.end_of_UART_packet = 1;
+	FLAG[3].end_of_UART_packet = 1;
+}
+//***********************************************************
+
+void Update_flag_End_of_UART_2_packet(void)
+{
+	FLAG[2].end_of_UART_packet = 1;
 }
 //***********************************************************
 
 void Update_flag_No_signal(void)
 {
-	FLAG.no_signal = 1;
+	FLAG[3].no_signal = 1;
 }
 //***********************************************************
 
 void Update_flag_Unbreakable_package(void)
 {
-	FLAG.unbreakable_package = 1;
+	FLAG[3].unbreakable_package = 1;
 }
 //***********************************************************
 
