@@ -81,14 +81,14 @@
 //***********************************************************
 //***********************************************************
 
-	FRESULT fres;
-	GPS_state_machine sm_stage;
-	RESULT_ENUM result;
-	NEO6_struct NEO6;
-	SD_Card_struct SD;
-	RingBuffer_DMA rx_buffer;
-	Flags_struct FLAG;
-	Debug_struct DebugH;
+	FRESULT 				fres;
+	GPS_state_machine 		sm_stage;
+	RESULT_ENUM 			result;
+	NEO6_struct 			NEO6;
+	SD_Card_struct 			SD;
+	RingBuffer_DMA 			rx_buffer3;
+	Flags_struct 			FLAG;
+	Debug_struct 			DebugH;
 
 //***********************************************************
 

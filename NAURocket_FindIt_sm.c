@@ -4,7 +4,7 @@
 
 //***********************************************************
 
-	uint8_t rx_circular_buffer[RX_BUFFER_SIZE];
+	uint8_t rx_circular_buffer3[RX_BUFFER_SIZE];
 	extern DMA_HandleTypeDef hdma_usart3_rx;
 	char DebugString[DEBUG_STRING_SIZE];
 
@@ -75,8 +75,8 @@ void NAUR_Init (void)
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
 
-	RingBuffer_DMA_Init(&rx_buffer, &hdma_usart3_rx, rx_circular_buffer, RX_BUFFER_SIZE);  	// Start UART receive
-	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);  	// how many bytes in buffer
+	RingBuffer_DMA_Init(&rx_buffer3, &hdma_usart3_rx, rx_circular_buffer3, RX_BUFFER_SIZE);  	// Start UART receive
+	HAL_UART_Receive_DMA(&huart3, rx_circular_buffer3, RX_BUFFER_SIZE);  	// how many bytes in buffer
 
 	#if (NAUR_FI_F446 == 1)
 		FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
@@ -126,7 +126,7 @@ void NAUR_Init (void)
 		if (hdma_usart3_rx.State == HAL_DMA_STATE_ERROR)
 			{
 				HAL_UART_DMAStop(&huart3);
-				HAL_UART_Receive_DMA(&huart3, rx_circular_buffer, RX_BUFFER_SIZE);
+				HAL_UART_Receive_DMA(&huart3, rx_circular_buffer3, RX_BUFFER_SIZE);
 			}
 	#endif
 	//***********************************************************
@@ -162,7 +162,7 @@ void NAUR_Main (void)
 
 		case SM_READ_FROM_RINGBUFFER:
 		{
-			Read_from_RingBuffer(&NEO6, &rx_buffer, &FLAG);
+			Read_from_RingBuffer(&NEO6, &rx_buffer3, &FLAG);
 			sm_stage = SM_CHECK_FLAGS;
 		} break;
 
