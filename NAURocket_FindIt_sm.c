@@ -61,10 +61,16 @@ void NAUR_Init (void)
 	sprintf(DebugString,"\r\n\r\n");
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
+	int soft_version_arr_int[3];
+	soft_version_arr_int[0] = ((SOFT_VERSION) / 100) %10 ;
+	soft_version_arr_int[1] = ((SOFT_VERSION) /  10) %10 ;
+	soft_version_arr_int[2] = ((SOFT_VERSION)      ) %10 ;
+
 #if (NAUR_FI_F446 == 1)
-	sprintf(DebugString,"NAUR Find It F446\r\n2019 lite3.0.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F446\r\n2020-April-21 v%d.%d.%d \r\nfor_debug UART5 115200/8-N-1\r\n",
+									soft_version_arr_int[0], soft_version_arr_int[1], soft_version_arr_int[2]);
 #elif (NAUR_FI_F103 == 1)
-	sprintf(DebugString,"NAUR Find It F103\r\n2019 lite3.0.0\r\nfor_debug UART5 115200/8-N-1\r\n");
+	sprintf(DebugString,"NAUR Find It F103\r\n2020-April-21 v%d.%d.%d\r\nfor_debug UART5 115200/8-N-1\r\n");
 #endif
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
