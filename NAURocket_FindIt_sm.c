@@ -206,7 +206,6 @@ void NAUR_Main (void)
 
 		case SM_PREPARE_FILENAME:
 		{
-			HAL_GPIO_WritePin(TEST_PN1_GPIO_Port, TEST_PN1_Pin, GPIO_PIN_SET);
 			Prepare_filename(&SD);
 			sm_stage = SM_WRITE_SDCARD;
 		} break;
@@ -228,7 +227,6 @@ void NAUR_Main (void)
 
 		case SM_FINISH:
 		{
-			HAL_GPIO_WritePin(TEST_PN1_GPIO_Port, TEST_PN1_Pin, GPIO_PIN_RESET);
 			sm_stage = SM_START;
 		} break;
 	//***********************************************************
