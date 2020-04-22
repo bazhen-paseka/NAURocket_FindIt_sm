@@ -22,10 +22,8 @@
 
 	void Print_GPS_to_UART(GPS_struct * _gps) ;
 	void Print_GPS_to_LCD(GPS_struct * _gps) ;
-
 	void Print_SD_Card_to_UART(SD_Card_struct * _sd ) ;
-
-	void Print_No_signal(void);
+	void Print_No_signal(GPS_channel _channel);
 
 	void TIM5_time_overflow_start(void);
 	void TIM5_time_overflow_stop(void);
@@ -40,6 +38,8 @@
 
 	void Beep(void);
 	void ShutDown(void);
+
+	void Check_bytes_in_UART_packet (GPS_channel _channel) ;
 
 //***********************************************************
 //***********************************************************
@@ -175,32 +175,15 @@ void NAUR_Main (void) {
 		//***********************************************************
 
 		case SM_CHECK_FLAGS: {
-			if (GPS[2].end_of_UART_packet_flag == FLAG_SET) {
-				GPS[2].end_of_UART_packet_flag = FLAG_RESET;
-				if ((GPS[2].length_int > 0) && (GPS[2].UART_packet_ready_flag == FLAG_RESET)) {
-					RTU_stop(GPS_CH_2);
-					TIM4_no_signal_Reset();
-					GPS[2].UART_packet_ready_flag = FLAG_SET;
-					GPS[2].sys_tick_u32 = HAL_GetTick();
-				}
-			}
-
-			if (GPS[3].end_of_UART_packet_flag == FLAG_SET) {
-				GPS[3].end_of_UART_packet_flag = FLAG_RESET;
-				if ((GPS[3].length_int > 0) && (GPS[3].UART_packet_ready_flag == FLAG_RESET)) {
-					RTU_stop(GPS_CH_3);
-					TIM4_no_signal_Reset();
-					GPS[3].UART_packet_ready_flag = FLAG_SET;
-					GPS[3].sys_tick_u32 = HAL_GetTick();
-				}
-			}
+			Check_bytes_in_UART_packet(GPS_CH_2);
+			Check_bytes_in_UART_packet(GPS_CH_3);
 
 			if ((GPS[2].UART_packet_ready_flag == FLAG_SET) && (GPS[3].UART_packet_ready_flag == FLAG_SET)) {
 				sm_stage = SM_PREPARE_FILENAME;
 				break;
 			}
 
-			if ((GPS[2].packet_overflow_flag == FLAG_SET) || (GPS[2].time_overflow_flag == FLAG_SET)) {
+			if ((GPS[GPS_CH_2].packet_overflow_flag == FLAG_SET) || (GPS[GPS_CH_2].time_overflow_flag == FLAG_SET)) {
 				RTU_stop(GPS_CH_2);
 				TIM4_no_signal_Reset();
 				Beep();
@@ -208,7 +191,7 @@ void NAUR_Main (void) {
 				break;
 			}
 
-			if ((GPS[3].packet_overflow_flag == FLAG_SET) || (GPS[3].time_overflow_flag == FLAG_SET)) {
+			if ((GPS[GPS_CH_3].packet_overflow_flag == FLAG_SET) || (GPS[GPS_CH_3].time_overflow_flag == FLAG_SET)) {
 				RTU_stop(GPS_CH_3);
 				TIM4_no_signal_Reset();
 				Beep();
@@ -222,8 +205,14 @@ void NAUR_Main (void) {
 				break;
 			}
 
-			if (GPS[3].no_signal_flag == FLAG_SET) {
-				Print_No_signal();
+			if (GPS[GPS_CH_2].no_signal_flag == FLAG_SET) {
+				Print_No_signal(GPS_CH_2);
+				sm_stage = SM_FINISH;
+				break;
+			}
+
+			if (GPS[GPS_CH_3].no_signal_flag == FLAG_SET) {
+				Print_No_signal(GPS_CH_3);
 				sm_stage = SM_FINISH;
 				break;
 			}
@@ -247,6 +236,10 @@ void NAUR_Main (void) {
 		case SM_PRINT_ALL_INFO: {
 			Print_GPS_to_UART(&GPS[2]) ;
 			Print_GPS_to_UART(&GPS[3]) ;
+			int delta_int = GPS[3].sys_tick_u32-GPS[2].sys_tick_u32;
+			char DebugString[DEBUG_STRING_SIZE];
+			sprintf(DebugString, "delta_int:%d\r\n", delta_int);
+				HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			Print_SD_Card_to_UART(&SD) ;
 
 			LCD_FillScreen(ILI92_BLACK);
@@ -270,6 +263,17 @@ void NAUR_Main (void) {
 }
 //***********************************************************
 
+void Check_bytes_in_UART_packet (GPS_channel _channel) {
+	if (GPS[_channel].end_of_UART_packet_flag == FLAG_SET) {
+		GPS[_channel].end_of_UART_packet_flag = FLAG_RESET;
+		if ((GPS[_channel].length_int > 0) && (GPS[_channel].UART_packet_ready_flag == FLAG_RESET)) {
+			RTU_stop(_channel);
+			TIM4_no_signal_Reset();
+			GPS[_channel].UART_packet_ready_flag = FLAG_SET;
+			GPS[_channel].sys_tick_u32 = HAL_GetTick();
+		}
+	}
+}
 void Print_GPS_to_LCD(GPS_struct * _gps) {
 	char DebugString[DEBUG_STRING_SIZE];
 	//	LCD_SetCursor(0, 95*(_time->seconds_int%2));
@@ -348,7 +352,6 @@ void RTU_3_reset(void) {
 	TIM3->CNT = 0;
 }
 //***********************************************************
-
 
 void RTU_2_reset(void) {
 	TIM2->CNT = 0;
@@ -486,9 +489,9 @@ void Set_flag_time_overflow_package(void) {
 }
 //***********************************************************
 
-void Print_No_signal(void) {
+void Print_No_signal(GPS_channel _channel) {
 	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,">> ## NO signal from GPS ##\r\n");
+	sprintf(DebugString,">> ## NO signal from GPS %d ##\r\n", (int)_channel);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
