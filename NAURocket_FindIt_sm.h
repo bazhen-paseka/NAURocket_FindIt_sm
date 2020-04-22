@@ -84,9 +84,9 @@
 	typedef struct {
 		TCHAR 		file_name_char[FILE_NAME_SIZE]	;
 		int			file_name_int					;
-		FRESULT 	write_status					;
+		FRESULT 	write_status_fr					;
 		DWORD		file_size						;
-		Flag_state 	shudown_button_pressed_flag			;
+		Flag_state 	shudown_button_pressed_flag		;
 	} SD_Card_struct;
 //***********************************************************
 //***********************************************************
@@ -97,15 +97,14 @@
 	GPS_struct 				GPS[GPS_CH_QNT]			;
 	SD_Card_struct 			SD						;
 	RingBuffer_DMA 			rx_buffer[GPS_CH_QNT]	;
-	Debug_struct 			DebugH					;
+	Debug_struct 			Debug_ch				;
 
 //***********************************************************
 
 	void NAUR_Init (void)						;
 	void NAUR_Main (void)						;
 
-	void Set_flag_End_of_UART_2_packet(void)	;
-	void Set_flag_End_of_UART_3_packet(void)	;
+	void Set_flag_End_of_UART_packet(GPS_channel _channel)	;
 	void RTU_2_reset(void)						;
 	void RTU_3_reset(void)						;
 

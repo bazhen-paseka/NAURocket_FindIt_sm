@@ -7,10 +7,7 @@
 	extern DMA_HandleTypeDef		hdma_usart2_rx;
 	extern DMA_HandleTypeDef		hdma_usart3_rx;
 
-	HAL_StatusTypeDef 				status_res;
-
 	uint8_t rx_circular_buffer[GPS_CH_QNT][RX_BUFFER_SIZE];
-	char DebugString[DEBUG_STRING_SIZE];
 
 //***********************************************************
 //***********************************************************
@@ -30,8 +27,8 @@
 
 	void Print_No_signal(void);
 
-	void TIM5_Unbreakable_package_Start(void);
-	void TIM5_Unbreakable_package_Stop(void);
+	void TIM5_time_overflow_start(void);
+	void TIM5_time_overflow_stop(void);
 	void TIM5_time_overflow_reset(void);
 
 	void RTU_3_start(void);
@@ -51,16 +48,18 @@
 //***********************************************************
 
 void NAUR_Init (void){
+	HAL_StatusTypeDef	status_res;
+	char DebugString[DEBUG_STRING_SIZE];
 	LCD_Init();
 	LCD_SetRotation(1);
 	LCD_SetCursor(0, 0);
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetTextColor(ILI92_GREEN, ILI92_BLACK);
 
-	DebugH.uart = &huart5;
+	Debug_ch.uart = &huart5;
 
 	sprintf(DebugString,"\r\n\r\n");
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	int soft_version_arr_int[3];
 	soft_version_arr_int[0] = ((SOFT_VERSION) / 100) %10 ;
@@ -68,18 +67,18 @@ void NAUR_Init (void){
 	soft_version_arr_int[2] = ((SOFT_VERSION)      ) %10 ;
 	sprintf(DebugString,"NAUR Find It F446\r\n2020-April-21 v%d.%d.%d \r\nfor_debug UART5 115200/8-N-1\r\n",
 			soft_version_arr_int[0], soft_version_arr_int[1], soft_version_arr_int[2]);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_Printf("%s",DebugString);
 
 	RingBuffer_DMA_Init(&rx_buffer[3], &hdma_usart3_rx, rx_circular_buffer[3], RX_BUFFER_SIZE);  	// Start UART receive
 	status_res = HAL_UART_Receive_DMA(&huart3, rx_circular_buffer[3], RX_BUFFER_SIZE);  	// how many bytes in buffer
 	sprintf(DebugString, "ch3: UART_3_DMA status:%d\r\n", (int)status_res);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	RingBuffer_DMA_Init(&rx_buffer[2], &hdma_usart2_rx, rx_circular_buffer[2], RX_BUFFER_SIZE);  	// Start UART receive
 	status_res = HAL_UART_Receive_DMA(&huart2, rx_circular_buffer[2], RX_BUFFER_SIZE);  	// how many bytes in buffer
 	sprintf(DebugString, "ch2: UART_2_DMA status:%d\r\n", (int)status_res);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	FATFS_SPI_Init(&hspi1);	/* Initialize SD Card low level SPI driver */
 	static uint8_t try_u8;
@@ -87,14 +86,14 @@ void NAUR_Init (void){
 		fres = f_mount(&USERFatFS, "", 1);	/* try to mount SDCARD */
 		if (fres == FR_OK) {
 			sprintf(DebugString,"\r\nSDcard mount - Ok \r\n");
-			HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			LCD_Printf("%s",DebugString);
 		} else {
 			f_mount(NULL, "", 0);			/* Unmount SDCARD */
 			Error_Handler();
 			try_u8++;
 			sprintf(DebugString,"%d)SDcard mount: Failed  Error: %d\r\n", try_u8, fres);
-			HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			LCD_Printf("%s",DebugString);
 			Beep();
 			HAL_Delay(1000);
@@ -123,7 +122,7 @@ void NAUR_Init (void){
 	} else {
 		sprintf(DebugString, "ch3: UART_3_DMA status - Ok.\r\n");
 	}
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	if (hdma_usart2_rx.State == HAL_DMA_STATE_ERROR) {
 			HAL_UART_DMAStop(&huart2);
@@ -132,7 +131,7 @@ void NAUR_Init (void){
 	} else {
 		sprintf(DebugString, "ch2: UART_2_DMA status - Ok.\r\n");
 	}
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	//***********************************************************
 
@@ -140,7 +139,7 @@ void NAUR_Init (void){
 	GPS[3].channel = GPS_CH_3;
 
 	LCD_FillScreen(ILI92_BLACK);
-	TIM5_Unbreakable_package_Start();
+	TIM5_time_overflow_start();
 	TIM4_no_signal_Start();
 
 	HAL_IWDG_Refresh(&hiwdg);
@@ -263,6 +262,7 @@ void NAUR_Main (void) {
 //***********************************************************
 
 void Print_GPS_to_LCD(GPS_struct * _gps) {
+	char DebugString[DEBUG_STRING_SIZE];
 	//	LCD_SetCursor(0, 95*(_time->seconds_int%2));
 	uint8_t lcd_circle = _gps->length_int / 254;
 	char tmp_str[0xFF];
@@ -280,37 +280,39 @@ void Print_GPS_to_LCD(GPS_struct * _gps) {
 //***********************************************************
 
 void Print_GPS_to_UART(GPS_struct * _gps) {
+	char DebugString[DEBUG_STRING_SIZE];
 	snprintf(DebugString, _gps->length_int +4,"%d) %s", (int)_gps->channel, _gps->string);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	if (_gps->time_overflow_flag == FLAG_SET) {
 		sprintf(DebugString,">> ## ch%d Time_overflow ##\r\n", (int)_gps->channel);
-		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+		HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	}
 
 	if (_gps->packet_overflow_flag == FLAG_SET) {
 		sprintf(DebugString,">> ## ch%d Packet_overflow ##\r\n", (int)_gps->channel);
-		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+		HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	}
 }
 //***********************************************************
 
 void Print_SD_Card_to_UART(SD_Card_struct * _sd ) {
+	char DebugString[DEBUG_STRING_SIZE];
 	sprintf(DebugString,">> file_name:%s; size: %d; SD_write: %d\r\n\r\n",
 												_sd->file_name_char,
 												(int)_sd->file_size,
-												_sd->write_status		);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+												_sd->write_status_fr		);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 }
 //***********************************************************
 
-void TIM5_Unbreakable_package_Start(void) {
+void TIM5_time_overflow_start(void) {
 	HAL_TIM_Base_Start_IT(&htim5);
 	HAL_TIM_Base_Start   (&htim5);
 }
 //***********************************************************
 
-void TIM5_Unbreakable_package_Stop(void) {
+void TIM5_time_overflow_stop(void) {
 	HAL_TIM_Base_Stop_IT(&htim5);
 	HAL_TIM_Base_Stop   (&htim5);
 }
@@ -373,11 +375,12 @@ void TIM4_no_signal_Reset(void) {
 //***********************************************************
 
 void ShutDown(void) {
+	char DebugString[DEBUG_STRING_SIZE];
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
 	for (int i=5; i>=0; i--) {
 		sprintf(DebugString,"Remove SD-card! Left %d sec.\r\n", i);
-		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+		HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
 		HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
 		HAL_Delay(1000);
@@ -390,6 +393,7 @@ void ShutDown(void) {
 //***********************************************************
 
 void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd) {
+	char DebugString[DEBUG_STRING_SIZE];
 	snprintf(DebugString, _gps->length_int+1,"%s", _gps->string);
 #if (NAUR_FI_F446 == 1)
 	fres = f_open(&USERFile, _sd->file_name_char, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
@@ -397,7 +401,7 @@ void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd) {
 	fres = f_open(&USERFile, _sd->file_name_char, FA_OPEN_ALWAYS | FA_WRITE);
 	fres += f_lseek(&USERFile, f_size(&USERFile));
 #endif
-	_sd->write_status = fres;
+	_sd->write_status_fr = fres;
 	if (fres == FR_OK) {
 		HAL_IWDG_Refresh(&hiwdg);
 		f_printf(&USERFile, "%s", DebugString);	/* Write to file */
@@ -431,7 +435,7 @@ void Clear_GPS_struct(GPS_struct * _gps) {
 //***********************************************************
 
 void Clear_SD_Card_struct(SD_Card_struct * _sd) {
-	_sd->write_status			= 0 ;
+	_sd->write_status_fr			= FR_OK ;
 }
 //***********************************************************
 
@@ -469,13 +473,8 @@ void Set_flag_Shudown_button_pressed(void) {
 }
 //***********************************************************
 
-void Set_flag_End_of_UART_2_packet(void) {
-	GPS[2].end_of_UART_packet_flag = FLAG_SET;
-}
-//***********************************************************
-
-void Set_flag_End_of_UART_3_packet(void) {
-	GPS[3].end_of_UART_packet_flag = FLAG_SET;
+void Set_flag_End_of_UART_packet(GPS_channel _channel) {
+	GPS[_channel].end_of_UART_packet_flag = FLAG_SET;
 }
 //***********************************************************
 
@@ -490,8 +489,9 @@ void Set_flag_time_overflow_package(void) {
 //***********************************************************
 
 void Print_No_signal(void) {
+	char DebugString[DEBUG_STRING_SIZE];
 	sprintf(DebugString,">> ## NO signal from GPS ##\r\n");
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	LCD_FillScreen(ILI92_BLACK);
 	LCD_SetCursor(0, 0);
 	LCD_Printf("%s", DebugString);
