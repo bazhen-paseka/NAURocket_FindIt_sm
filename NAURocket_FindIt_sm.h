@@ -70,14 +70,16 @@
 //***********************************************************
 
 	typedef struct {
-		GPS_channel		channel					;
-		char 			string[GPS_MAX_LENGTH]	;
-		int 			length_int				;
-		Flag_state 		end_of_UART_packet_flag	;
-		Flag_state 		packet_overflow_flag	;
-		Flag_state		no_signal_flag			;
-		Flag_state 		time_overflow_flag		;
-		Flag_state		UART_packet_ready_flag	;
+		GPS_channel			channel					;
+		char 				string[GPS_MAX_LENGTH]	;
+		int 				length_int				;
+		Flag_state 			end_of_UART_packet_flag	;
+		Flag_state 			packet_overflow_flag	;
+		Flag_state			no_signal_flag			;
+		Flag_state 			time_overflow_flag		;
+		Flag_state			UART_packet_ready_flag	;
+		uint32_t			sys_tick_u32			;
+		TIM_HandleTypeDef *	rtu_handler				;
 	} GPS_struct;
 //***********************************************************
 

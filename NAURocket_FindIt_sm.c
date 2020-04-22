@@ -31,11 +31,8 @@
 	void TIM5_time_overflow_stop(void);
 	void TIM5_time_overflow_reset(void);
 
-	void RTU_3_start(void);
-	void RTU_3_stop(void);
-
-	void RTU_2_start(void);
-	void RTU_2_stop(void);
+	void RTU_start(GPS_channel _channel);
+	void RTU_stop(GPS_channel _channel);
 
 	void TIM4_no_signal_Start(void);
 	void TIM4_no_signal_Stop(void);
@@ -57,6 +54,11 @@ void NAUR_Init (void){
 	LCD_SetTextColor(ILI92_GREEN, ILI92_BLACK);
 
 	Debug_ch.uart = &huart5;
+	GPS[2].channel = GPS_CH_2;
+	GPS[2].rtu_handler = &htim2;
+
+	GPS[3].channel = GPS_CH_3;
+	GPS[3].rtu_handler = &htim3;
 
 	sprintf(DebugString,"\r\n\r\n");
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -135,9 +137,6 @@ void NAUR_Init (void){
 
 	//***********************************************************
 
-	GPS[2].channel = GPS_CH_2;
-	GPS[3].channel = GPS_CH_3;
-
 	LCD_FillScreen(ILI92_BLACK);
 	TIM5_time_overflow_start();
 	TIM4_no_signal_Start();
@@ -156,10 +155,10 @@ void NAUR_Main (void) {
 			Clear_SD_Card_struct(&SD);
 
 			RTU_2_reset();
-			RTU_2_start();
+			RTU_start(GPS_CH_2);
 
 			RTU_3_reset();
-			RTU_3_start();
+			RTU_start(GPS_CH_3);
 
 			TIM5_time_overflow_reset();
 			sm_stage =SM_READ_FROM_RINGBUFFER;
@@ -179,18 +178,20 @@ void NAUR_Main (void) {
 			if (GPS[2].end_of_UART_packet_flag == FLAG_SET) {
 				GPS[2].end_of_UART_packet_flag = FLAG_RESET;
 				if ((GPS[2].length_int > 0) && (GPS[2].UART_packet_ready_flag == FLAG_RESET)) {
-					RTU_2_stop();
+					RTU_stop(GPS_CH_2);
 					TIM4_no_signal_Reset();
 					GPS[2].UART_packet_ready_flag = FLAG_SET;
+					GPS[2].sys_tick_u32 = HAL_GetTick();
 				}
 			}
 
 			if (GPS[3].end_of_UART_packet_flag == FLAG_SET) {
 				GPS[3].end_of_UART_packet_flag = FLAG_RESET;
 				if ((GPS[3].length_int > 0) && (GPS[3].UART_packet_ready_flag == FLAG_RESET)) {
-					RTU_3_stop();
+					RTU_stop(GPS_CH_3);
 					TIM4_no_signal_Reset();
 					GPS[3].UART_packet_ready_flag = FLAG_SET;
+					GPS[3].sys_tick_u32 = HAL_GetTick();
 				}
 			}
 
@@ -199,8 +200,16 @@ void NAUR_Main (void) {
 				break;
 			}
 
+			if ((GPS[2].packet_overflow_flag == FLAG_SET) || (GPS[2].time_overflow_flag == FLAG_SET)) {
+				RTU_stop(GPS_CH_2);
+				TIM4_no_signal_Reset();
+				Beep();
+				sm_stage = SM_PREPARE_FILENAME;
+				break;
+			}
+
 			if ((GPS[3].packet_overflow_flag == FLAG_SET) || (GPS[3].time_overflow_flag == FLAG_SET)) {
-				RTU_3_stop();
+				RTU_stop(GPS_CH_3);
 				TIM4_no_signal_Reset();
 				Beep();
 				sm_stage = SM_PREPARE_FILENAME;
@@ -281,7 +290,7 @@ void Print_GPS_to_LCD(GPS_struct * _gps) {
 
 void Print_GPS_to_UART(GPS_struct * _gps) {
 	char DebugString[DEBUG_STRING_SIZE];
-	snprintf(DebugString, _gps->length_int +4,"%d) %s", (int)_gps->channel, _gps->string);
+	snprintf(DebugString, _gps->length_int + 11,"%d) %06d %s", (int)_gps->channel, (int)_gps->sys_tick_u32, _gps->string);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	if (_gps->time_overflow_flag == FLAG_SET) {
@@ -323,15 +332,15 @@ void TIM5_time_overflow_reset(void) {
 }
 //***********************************************************
 
-void RTU_3_start(void) {
-	HAL_TIM_Base_Start_IT(&htim3);
-	HAL_TIM_Base_Start   (&htim3);
+void RTU_start(GPS_channel _channel) {
+	HAL_TIM_Base_Start_IT(GPS[_channel].rtu_handler);
+	HAL_TIM_Base_Start   (GPS[_channel].rtu_handler);
 }
 //***********************************************************
 
-void RTU_3_stop(void) {
-	HAL_TIM_Base_Stop_IT(&htim3);
-	HAL_TIM_Base_Stop   (&htim3);
+void RTU_stop(GPS_channel _channel) {
+	HAL_TIM_Base_Stop_IT(GPS[_channel].rtu_handler);
+	HAL_TIM_Base_Stop   (GPS[_channel].rtu_handler);
 }
 //***********************************************************
 
@@ -340,17 +349,6 @@ void RTU_3_reset(void) {
 }
 //***********************************************************
 
-void RTU_2_start(void){
-	HAL_TIM_Base_Start_IT(&htim2);
-	HAL_TIM_Base_Start   (&htim2);
-}
-//***********************************************************
-
-void RTU_2_stop(void) {
-	HAL_TIM_Base_Stop_IT(&htim2);
-	HAL_TIM_Base_Stop   (&htim2);
-}
-//***********************************************************
 
 void RTU_2_reset(void) {
 	TIM2->CNT = 0;
