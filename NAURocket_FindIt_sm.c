@@ -15,18 +15,24 @@
 //***********************************************************
 //***********************************************************
 
-	void Clear_variables(GPS_struct * _gps_1, GPS_struct * _gps_2, SD_Card_struct * _sd);
+	void Clear_GPS_struct		(GPS_struct 	* _gps);
+	void Clear_SD_Card_struct	(SD_Card_struct * _sd );
+
 	void Read_from_RingBuffer(GPS_struct * _gps, RingBuffer_DMA * buffer);
 
 	void Prepare_filename(SD_Card_struct * _sd);
 	void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd);
 
-	void Print_all_info(GPS_struct * _gps, SD_Card_struct * _sd);
+	void Print_GPS_to_UART(GPS_struct * _gps) ;
+	void Print_GPS_to_LCD(GPS_struct * _gps) ;
+
+	void Print_SD_Card_to_UART(SD_Card_struct * _sd ) ;
+
 	void Print_No_signal(void);
 
 	void TIM5_Unbreakable_package_Start(void);
 	void TIM5_Unbreakable_package_Stop(void);
-	void TIM5_Unbreakable_package_Reset(void);
+	void TIM5_time_overflow_reset(void);
 
 	void RTU_3_start(void);
 	void RTU_3_stop(void);
@@ -180,7 +186,9 @@ void NAUR_Main (void)
 	{
 		case SM_START:
 		{
-			Clear_variables(&GPS[2], &GPS[3], &SD);
+			Clear_GPS_struct(&GPS[2]);
+			Clear_GPS_struct(&GPS[3]);
+			Clear_SD_Card_struct(&SD);
 
 			RTU_2_reset();
 			RTU_2_start();
@@ -188,7 +196,7 @@ void NAUR_Main (void)
 			RTU_3_reset();
 			RTU_3_start();
 
-			TIM5_Unbreakable_package_Reset();
+			TIM5_time_overflow_reset();
 			sm_stage =SM_READ_FROM_RINGBUFFER;
 		} break;
 
@@ -205,15 +213,25 @@ void NAUR_Main (void)
 
 		case SM_CHECK_FLAGS:
 		{
-			if (GPS[3].end_of_UART_packet == 1)
-			{
-				RTU_3_stop();
-				if (GPS[3].length_int == 0)
-				{
-					sm_stage = SM_FINISH;
-					break;
+			if (GPS[2].end_of_UART_packet == 1) {
+				GPS[2].end_of_UART_packet = 0;
+				if ((GPS[2].length_int > 0) && (GPS[2].UART_packet_ready_u8 == 0)) {
+					RTU_2_stop();
+					TIM4_no_signal_Reset();
+					GPS[2].UART_packet_ready_u8 = 1;
 				}
-				TIM4_no_signal_Reset();
+			}
+
+			if (GPS[3].end_of_UART_packet == 1) {
+				GPS[3].end_of_UART_packet = 0;
+				if ((GPS[3].length_int > 0) && (GPS[3].UART_packet_ready_u8 == 0)) {
+					RTU_3_stop();
+					TIM4_no_signal_Reset();
+					GPS[3].UART_packet_ready_u8 = 1;
+				}
+			}
+
+			if ((GPS[2].UART_packet_ready_u8 == 1) && (GPS[3].UART_packet_ready_u8 == 1)) {
 				sm_stage = SM_PREPARE_FILENAME;
 				break;
 			}
@@ -261,7 +279,15 @@ void NAUR_Main (void)
 
 		case SM_PRINT_ALL_INFO:
 		{
-			Print_all_info(&GPS[3],&SD );
+			Print_GPS_to_UART(&GPS[2]) ;
+			Print_GPS_to_UART(&GPS[3]) ;
+			Print_SD_Card_to_UART(&SD) ;
+
+			LCD_FillScreen(ILI92_BLACK);
+			LCD_SetCursor(0, 0);
+			Print_GPS_to_LCD(&GPS[2]);
+			Print_GPS_to_LCD(&GPS[3]);
+
 			sm_stage = SM_FINISH;
 		} break;
 	//***********************************************************
@@ -280,33 +306,10 @@ void NAUR_Main (void)
 }
 //***********************************************************
 
-void Print_all_info(GPS_struct * _gps, SD_Card_struct * _sd )
-{
-	snprintf(DebugString, _gps->length_int+3,"\r\n%s", _gps->string);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-
-	sprintf(DebugString,">> file_name:%s; size: %d; SD_write: %d\r\n",
-												_sd->file_name_char,
-												(int)_sd->file_size,
-												_sd->write_status		);
-	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-
-	if (GPS[3].time_overflow_u8 == 1)
-	{
-		sprintf(DebugString,">> ## Unbreakable package ##\r\n");
-		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-	}
-
-	if (GPS[3].packet_overflow == 1)
-	{
-		sprintf(DebugString,">> ## Packet overflow ##\r\n");
-		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-	}
-
-//	LCD_SetCursor(0, 95*(_time->seconds_int%2));
-#if (NAUR_FI_F446 == 1)
-	LCD_FillScreen(ILI92_BLACK);
-	LCD_SetCursor(0, 0);
+void Print_GPS_to_LCD(GPS_struct * _gps) {
+	//	LCD_SetCursor(0, 95*(_time->seconds_int%2));
+	//	LCD_FillScreen(ILI92_BLACK);
+	//	LCD_SetCursor(0, 0);
 	uint8_t lcd_circle = _gps->length_int / 254;
 	char tmp_str[0xFF];
 	for (int i = 0; i < lcd_circle; i++)
@@ -320,34 +323,47 @@ void Print_all_info(GPS_struct * _gps, SD_Card_struct * _sd )
 	memcpy(tmp_str, &_gps->string[lcd_circle*254], tmp_ctr_size);
 	snprintf(DebugString, tmp_ctr_size + 1, "%s", tmp_str);
 	LCD_Printf("%s", DebugString);
-#elif (NAUR_FI_F103 == 1)
-	LCD_FillScreen(ILI92_WHITE);
-	LCD_SetCursor(0, 0);
-	char tmp_str[0xFF];
-	memcpy(tmp_str, &_gps->string[0], 255-1);
-	snprintf(DebugString, 255,"%s", tmp_str);
-	LCD_Printf("%s", DebugString);
-#endif
-
 }
 //***********************************************************
 
-void TIM5_Unbreakable_package_Start(void)
-{
+void Print_GPS_to_UART(GPS_struct * _gps) {
+	snprintf(DebugString, _gps->length_int +4,"%d) %s", (int)_gps->channel, _gps->string);
+	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+
+	if (_gps->time_overflow_u8 == 1) {
+		sprintf(DebugString,">> ## ch%d Time_overflow ##\r\n", (int)_gps->channel);
+		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	}
+
+	if (_gps->packet_overflow == 1) {
+		sprintf(DebugString,">> ## ch%d Packet_overflow ##\r\n", (int)_gps->channel);
+		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	}
+}
+//***********************************************************
+
+void Print_SD_Card_to_UART(SD_Card_struct * _sd ) {
+	sprintf(DebugString,">> file_name:%s; size: %d; SD_write: %d\r\n\r\n",
+												_sd->file_name_char,
+												(int)_sd->file_size,
+												_sd->write_status		);
+	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+}
+//***********************************************************
+
+void TIM5_Unbreakable_package_Start(void) {
 	HAL_TIM_Base_Start_IT(&htim5);
 	HAL_TIM_Base_Start   (&htim5);
 }
 //***********************************************************
 
-void TIM5_Unbreakable_package_Stop(void)
-{
+void TIM5_Unbreakable_package_Stop(void) {
 	HAL_TIM_Base_Stop_IT(&htim5);
 	HAL_TIM_Base_Stop   (&htim5);
 }
 //***********************************************************
 
-void TIM5_Unbreakable_package_Reset(void)
-{
+void TIM5_time_overflow_reset(void) {
 	TIM5->CNT = 0;
 }
 //***********************************************************
@@ -393,21 +409,18 @@ void TIM4_no_signal_Start(void)
 }
 //***********************************************************
 
-void TIM4_no_signal_Stop(void)
-{
+void TIM4_no_signal_Stop(void) {
 	HAL_TIM_Base_Stop_IT(&htim4);
 	HAL_TIM_Base_Stop   (&htim4);
 }
 //***********************************************************
 
-void TIM4_no_signal_Reset(void)
-{
+void TIM4_no_signal_Reset(void) {
 	TIM4->CNT = 0;
 }
 //***********************************************************
 
-void ShutDown(void)
-{
+void ShutDown(void) {
 #if (NAUR_FI_F446 == 1)
 	LCD_FillScreen(ILI92_BLACK);
 #elif (NAUR_FI_F103 == 1)
@@ -415,8 +428,7 @@ void ShutDown(void)
 #endif
 
 	LCD_SetCursor(0, 0);
-	for (int i=5; i>=0; i--)
-	{
+	for (int i=5; i>=0; i--) {
 		sprintf(DebugString,"Remove SD-card! Left %d sec.\r\n", i);
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		LCD_Printf("%s",DebugString);
@@ -435,8 +447,7 @@ void ShutDown(void)
 }
 //***********************************************************
 
-void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd)
-{
+void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd) {
 	snprintf(DebugString, _gps->length_int+1,"%s", _gps->string);
 #if (NAUR_FI_F446 == 1)
 	fres = f_open(&USERFile, _sd->file_name_char, FA_OPEN_APPEND | FA_WRITE );			/* Try to open file */
@@ -445,15 +456,12 @@ void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd)
 	fres += f_lseek(&USERFile, f_size(&USERFile));
 #endif
 	_sd->write_status = fres;
-	if (fres == FR_OK)
-	{
+	if (fres == FR_OK) {
 		HAL_IWDG_Refresh(&hiwdg);
 		f_printf(&USERFile, "%s", DebugString);	/* Write to file */
 		_sd->file_size = f_size(&USERFile);
 		f_close(&USERFile);	/* Close file */
-	}
-	else
-	{
+	} else {
 		#if (DEBUG_MODE == 1)
 			HAL_IWDG_Refresh(&hiwdg);
 		#else
@@ -463,30 +471,25 @@ void SDcard_Write(GPS_struct * _gps, SD_Card_struct * _sd)
 }
 //***********************************************************
 
-void Beep (void)
-{
+void Beep (void) {
 	HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_RESET);
 	HAL_Delay(50);
 	HAL_GPIO_WritePin(BEEPER_GPIO_Port, BEEPER_Pin, GPIO_PIN_SET);
 }
 //***********************************************************
 
-void Clear_variables(GPS_struct * _gps_1, GPS_struct * _gps_2, SD_Card_struct * _sd)
-{
-	_sd->write_status				= 0 ;
+void Clear_GPS_struct(GPS_struct * _gps) {
+	_gps->length_int			= 0 ;
+	_gps->end_of_UART_packet	= 0 ;
+	_gps->no_signal	 			= 0 ;
+	_gps->time_overflow_u8		= 0 ;
+	_gps->packet_overflow		= 0 ;
+	_gps->UART_packet_ready_u8	= 0 ;
+}
+//***********************************************************
 
-	_gps_1->length_int				= 0 ;
-	_gps_2->length_int				= 0 ;
-
-	_gps_1->end_of_UART_packet		= 0 ;
-	_gps_1->no_signal	 			= 0 ;
-	_gps_1->time_overflow_u8		= 0 ;
-	_gps_1->packet_overflow			= 0 ;
-
-	_gps_2->end_of_UART_packet		= 0 ;
-	_gps_2->no_signal	 			= 0 ;
-	_gps_2->time_overflow_u8		= 0 ;
-	_gps_2->packet_overflow			= 0 ;
+void Clear_SD_Card_struct(SD_Card_struct * _sd) {
+	_sd->write_status			= 0 ;
 }
 //***********************************************************
 
@@ -529,15 +532,15 @@ void Set_flag_Shudown_button_pressed(void)
 }
 //***********************************************************
 
-void Set_flag_End_of_UART_3_packet(void)
-{
-	GPS[3].end_of_UART_packet = 1;
-}
-//***********************************************************
-
 void Set_flag_End_of_UART_2_packet(void)
 {
 	GPS[2].end_of_UART_packet = 1;
+}
+//***********************************************************
+
+void Set_flag_End_of_UART_3_packet(void)
+{
+	GPS[3].end_of_UART_packet = 1;
 }
 //***********************************************************
 

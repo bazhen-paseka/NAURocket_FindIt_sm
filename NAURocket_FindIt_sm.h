@@ -71,6 +71,7 @@
 		uint8_t 		packet_overflow			;
 		uint8_t			no_signal				;
 		uint8_t 		time_overflow_u8		;
+		uint8_t			UART_packet_ready_u8	;
 	} GPS_struct;
 //***********************************************************
 
