@@ -25,16 +25,16 @@
 	void Print_SD_Card_to_UART(SD_Card_struct * _sd ) ;
 	void Print_No_signal(GPS_channel _channel);
 
-	void TIM5_time_overflow_start(void);
-	void TIM5_time_overflow_stop(void);
-	void TIM5_time_overflow_reset(void);
+	void TIM_time_overflow_start(GPS_channel _channel);
+	void TIM_time_overflow_stop(GPS_channel _channel);
+	void TIM_time_overflow_reset(GPS_channel _channel);
 
 	void RTU_start(GPS_channel _channel);
 	void RTU_stop(GPS_channel _channel);
 
-	void TIM4_no_signal_Start(void);
-	void TIM4_no_signal_Stop(void);
-	void TIM4_no_signal_Reset(void);
+	void TIM_no_signal_Start (GPS_channel _channel);
+	void TIM_no_signal_Stop  (GPS_channel _channel);
+	void TIM_no_signal_Reset (GPS_channel _channel);
 
 	void Beep(void);
 	void ShutDown(void);
@@ -54,11 +54,16 @@ void NAUR_Init (void){
 	LCD_SetTextColor(ILI92_GREEN, ILI92_BLACK);
 
 	Debug_ch.uart = &huart5;
+
 	GPS[2].channel = GPS_CH_2;
 	GPS[2].rtu_handler = &htim2;
+	GPS[2].tim_no_sigmal_handler = &htim4;
+	GPS[2].time_overflow_handler = &htim5;
 
 	GPS[3].channel = GPS_CH_3;
 	GPS[3].rtu_handler = &htim3;
+	GPS[3].tim_no_sigmal_handler = &htim6;
+	GPS[3].time_overflow_handler = &htim7;
 
 	sprintf(DebugString,"\r\n\r\n");
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
@@ -138,8 +143,12 @@ void NAUR_Init (void){
 	//***********************************************************
 
 	LCD_FillScreen(ILI92_BLACK);
-	TIM5_time_overflow_start();
-	TIM4_no_signal_Start();
+
+	TIM_time_overflow_start(GPS_CH_2);
+	TIM_time_overflow_start(GPS_CH_3);
+
+	TIM_no_signal_Start(GPS_CH_2);
+	TIM_no_signal_Start(GPS_CH_3);
 
 	HAL_IWDG_Refresh(&hiwdg);
 }
@@ -154,17 +163,19 @@ void NAUR_Main (void) {
 			Clear_GPS_struct(&GPS[3]);
 			Clear_SD_Card_struct(&SD);
 
-			RTU_2_reset();
+			RTU_reset(GPS_CH_2);
 			RTU_start(GPS_CH_2);
 
-			RTU_3_reset();
+			RTU_reset(GPS_CH_3);
 			RTU_start(GPS_CH_3);
 
-			TIM5_time_overflow_reset();
+			TIM_time_overflow_reset(GPS_CH_2);
+			TIM_time_overflow_reset(GPS_CH_3);
+
 			sm_stage =SM_READ_FROM_RINGBUFFER;
 		} break;
 
-		//***********************************************************
+	//--------------------------------------------------------
 
 		case SM_READ_FROM_RINGBUFFER: {
 			Read_from_RingBuffer(&GPS[3], &rx_buffer[3] );
@@ -172,7 +183,7 @@ void NAUR_Main (void) {
 			sm_stage = SM_CHECK_FLAGS;
 		} break;
 
-		//***********************************************************
+	//--------------------------------------------------------
 
 		case SM_CHECK_FLAGS: {
 			Check_bytes_in_UART_packet(GPS_CH_2);
@@ -185,7 +196,6 @@ void NAUR_Main (void) {
 
 			if ((GPS[GPS_CH_2].packet_overflow_flag == FLAG_SET) || (GPS[GPS_CH_2].time_overflow_flag == FLAG_SET)) {
 				RTU_stop(GPS_CH_2);
-				TIM4_no_signal_Reset();
 				Beep();
 				sm_stage = SM_PREPARE_FILENAME;
 				break;
@@ -193,7 +203,6 @@ void NAUR_Main (void) {
 
 			if ((GPS[GPS_CH_3].packet_overflow_flag == FLAG_SET) || (GPS[GPS_CH_3].time_overflow_flag == FLAG_SET)) {
 				RTU_stop(GPS_CH_3);
-				TIM4_no_signal_Reset();
 				Beep();
 				sm_stage = SM_PREPARE_FILENAME;
 				break;
@@ -219,27 +228,28 @@ void NAUR_Main (void) {
 
 			sm_stage = SM_READ_FROM_RINGBUFFER;
 		} break;
-	//***********************************************************
+	//--------------------------------------------------------
 
 		case SM_PREPARE_FILENAME: {
 			Prepare_filename(&SD);
 			sm_stage = SM_WRITE_SDCARD;
 		} break;
-	//***********************************************************
+	//--------------------------------------------------------
 
 		case SM_WRITE_SDCARD: {
 			SDcard_Write(&GPS[3], &SD);
 			sm_stage = SM_PRINT_ALL_INFO;
 		} break;
-	//***********************************************************
+	//--------------------------------------------------------
 
 		case SM_PRINT_ALL_INFO: {
 			Print_GPS_to_UART(&GPS[2]) ;
 			Print_GPS_to_UART(&GPS[3]) ;
-			int delta_int = GPS[3].sys_tick_u32-GPS[2].sys_tick_u32;
+			int delta_int = GPS[2].sys_tick_u32 - GPS[3].sys_tick_u32;
 			char DebugString[DEBUG_STRING_SIZE];
 			sprintf(DebugString, "delta_int:%d\r\n", delta_int);
-				HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+			if ((delta_int< -500) || (delta_int > 500))  HAL_Delay(500);
 			Print_SD_Card_to_UART(&SD) ;
 
 			LCD_FillScreen(ILI92_BLACK);
@@ -249,12 +259,12 @@ void NAUR_Main (void) {
 
 			sm_stage = SM_FINISH;
 		} break;
-	//***********************************************************
+	//--------------------------------------------------------
 
 		case SM_FINISH: {
 			sm_stage = SM_START;
 		} break;
-	//***********************************************************
+	//--------------------------------------------------------
 
 		default: {
 			sm_stage = SM_START;
@@ -268,12 +278,14 @@ void Check_bytes_in_UART_packet (GPS_channel _channel) {
 		GPS[_channel].end_of_UART_packet_flag = FLAG_RESET;
 		if ((GPS[_channel].length_int > 0) && (GPS[_channel].UART_packet_ready_flag == FLAG_RESET)) {
 			RTU_stop(_channel);
-			TIM4_no_signal_Reset();
+			TIM_no_signal_Reset(_channel);
 			GPS[_channel].UART_packet_ready_flag = FLAG_SET;
 			GPS[_channel].sys_tick_u32 = HAL_GetTick();
 		}
 	}
 }
+//***********************************************************
+
 void Print_GPS_to_LCD(GPS_struct * _gps) {
 	char DebugString[DEBUG_STRING_SIZE];
 	//	LCD_SetCursor(0, 95*(_time->seconds_int%2));
@@ -294,7 +306,7 @@ void Print_GPS_to_LCD(GPS_struct * _gps) {
 
 void Print_GPS_to_UART(GPS_struct * _gps) {
 	char DebugString[DEBUG_STRING_SIZE];
-	snprintf(DebugString, _gps->length_int + 11,"%d) %06d %s", (int)_gps->channel, (int)_gps->sys_tick_u32, _gps->string);
+	snprintf(DebugString, _gps->length_int + 12,"%d) %07d %s", (int)_gps->channel, (int)_gps->sys_tick_u32, _gps->string);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	if (_gps->time_overflow_flag == FLAG_SET) {
@@ -319,20 +331,27 @@ void Print_SD_Card_to_UART(SD_Card_struct * _sd ) {
 }
 //***********************************************************
 
-void TIM5_time_overflow_start(void) {
-	HAL_TIM_Base_Start_IT(&htim5);
-	HAL_TIM_Base_Start   (&htim5);
+void TIM_time_overflow_start(GPS_channel _channel) {
+	HAL_TIM_Base_Start_IT(GPS[_channel].time_overflow_handler);
+	HAL_TIM_Base_Start   (GPS[_channel].time_overflow_handler);
 }
 //***********************************************************
 
-void TIM5_time_overflow_stop(void) {
-	HAL_TIM_Base_Stop_IT(&htim5);
-	HAL_TIM_Base_Stop   (&htim5);
+void TIM_time_overflow_stop(GPS_channel _channel) {
+	HAL_TIM_Base_Stop_IT(GPS[_channel].time_overflow_handler);
+	HAL_TIM_Base_Stop   (GPS[_channel].time_overflow_handler);
 }
 //***********************************************************
 
-void TIM5_time_overflow_reset(void) {
-	TIM5->CNT = 0;
+void TIM_time_overflow_reset(GPS_channel _channel) {
+	switch (_channel) {
+		case GPS_CH_0: 						break;
+		case GPS_CH_1: 						break;
+		case GPS_CH_2: 		TIM5->CNT = 0;	break;
+		case GPS_CH_3:		TIM7->CNT = 0;	break;
+		case GPS_CH_QNT:					break;
+		default: 							break;
+	}
 }
 //***********************************************************
 
@@ -348,30 +367,40 @@ void RTU_stop(GPS_channel _channel) {
 }
 //***********************************************************
 
-void RTU_3_reset(void) {
-	TIM3->CNT = 0;
+void RTU_reset(GPS_channel _channel) {
+	switch (_channel) {
+		case GPS_CH_0: 						break;
+		case GPS_CH_1: 						break;
+		case GPS_CH_2: 		TIM2->CNT = 0;	break;
+		case GPS_CH_3:		TIM3->CNT = 0;	break;
+		case GPS_CH_QNT:					break;
+		default: 							break;
+	}
+	TIM_no_signal_Reset(_channel);
 }
 //***********************************************************
 
-void RTU_2_reset(void) {
-	TIM2->CNT = 0;
-}
-
-//***********************************************************
-void TIM4_no_signal_Start(void) {
-	HAL_TIM_Base_Start_IT(&htim4);
-	HAL_TIM_Base_Start   (&htim4);
+void TIM_no_signal_Start(GPS_channel _channel) {
+	HAL_TIM_Base_Start_IT(GPS[_channel].tim_no_sigmal_handler);
+	HAL_TIM_Base_Start   (GPS[_channel].tim_no_sigmal_handler);
 }
 //***********************************************************
 
-void TIM4_no_signal_Stop(void) {
-	HAL_TIM_Base_Stop_IT(&htim4);
-	HAL_TIM_Base_Stop   (&htim4);
+void TIM_no_signal_Stop(GPS_channel _channel) {
+	HAL_TIM_Base_Stop_IT(GPS[_channel].tim_no_sigmal_handler);
+	HAL_TIM_Base_Stop   (GPS[_channel].tim_no_sigmal_handler);
 }
 //***********************************************************
 
-void TIM4_no_signal_Reset(void) {
-	TIM4->CNT = 0;
+void TIM_no_signal_Reset(GPS_channel _channel) {
+	switch (_channel) {
+		case GPS_CH_0: 						break;
+		case GPS_CH_1: 						break;
+		case GPS_CH_2: 		TIM4->CNT = 0;	break;
+		case GPS_CH_3:		TIM6->CNT = 0;	break;
+		case GPS_CH_QNT:					break;
+		default: 							break;
+	}
 }
 //***********************************************************
 
@@ -479,13 +508,13 @@ void Set_flag_End_of_UART_packet(GPS_channel _channel) {
 }
 //***********************************************************
 
-void Set_flag_No_signal(void) {
-	GPS[3].no_signal_flag = FLAG_SET;
+void Set_flag_No_signal(GPS_channel _channel) {
+	GPS[_channel].no_signal_flag = FLAG_SET;
 }
 //***********************************************************
 
-void Set_flag_time_overflow_package(void) {
-	GPS[3].time_overflow_flag = FLAG_SET;
+void Set_flag_time_overflow_package(GPS_channel _channel) {
+	GPS[_channel].time_overflow_flag = FLAG_SET;
 }
 //***********************************************************
 

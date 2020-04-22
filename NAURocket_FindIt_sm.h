@@ -80,6 +80,8 @@
 		Flag_state			UART_packet_ready_flag	;
 		uint32_t			sys_tick_u32			;
 		TIM_HandleTypeDef *	rtu_handler				;
+		TIM_HandleTypeDef *	tim_no_sigmal_handler	;
+		TIM_HandleTypeDef *	time_overflow_handler	;
 	} GPS_struct;
 //***********************************************************
 
@@ -103,16 +105,15 @@
 
 //***********************************************************
 
-	void NAUR_Init (void)						;
-	void NAUR_Main (void)						;
+	void NAUR_Init (void)										;
+	void NAUR_Main (void)										;
+	void Set_flag_Shudown_button_pressed(void)					;
 
-	void Set_flag_End_of_UART_packet(GPS_channel _channel)	;
-	void RTU_2_reset(void)						;
-	void RTU_3_reset(void)						;
+	void Set_flag_End_of_UART_packet(GPS_channel _channel)		;
+	void RTU_reset(GPS_channel _channel)						;
 
-	void Set_flag_No_signal(void)				;
-	void Set_flag_time_overflow_package(void)	;
-	void Set_flag_Shudown_button_pressed(void)	;
+	void Set_flag_No_signal(GPS_channel _channel)				;
+	void Set_flag_time_overflow_package(GPS_channel _channel)	;
 
 //***********************************************************
 #endif 	//	NAUROCKET_FINDIT_SM_H_INCLUDED
