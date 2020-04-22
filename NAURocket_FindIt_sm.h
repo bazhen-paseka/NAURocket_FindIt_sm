@@ -28,6 +28,12 @@
 
 	typedef enum
 	{
+	  FLAG_RESET = 0,
+	  FLAG_SET
+	} Flag_state;
+//***********************************************************
+	typedef enum
+	{
 		SM_START					,
 		SM_READ_FROM_RINGBUFFER		,
 		SM_CHECK_FLAGS				,
@@ -67,11 +73,11 @@
 		GPS_channel		channel					;
 		char 			string[GPS_MAX_LENGTH]	;
 		int 			length_int				;
-		uint8_t 		end_of_UART_packet		;
-		uint8_t 		packet_overflow			;
-		uint8_t			no_signal				;
-		uint8_t 		time_overflow_u8		;
-		uint8_t			UART_packet_ready_u8	;
+		Flag_state 		end_of_UART_packet_flag	;
+		Flag_state 		packet_overflow_flag	;
+		Flag_state		no_signal_flag			;
+		Flag_state 		time_overflow_flag		;
+		Flag_state		UART_packet_ready_flag	;
 	} GPS_struct;
 //***********************************************************
 
@@ -80,7 +86,7 @@
 		int			file_name_int					;
 		FRESULT 	write_status					;
 		DWORD		file_size						;
-		uint8_t 	shudown_button_pressed			;
+		Flag_state 	shudown_button_pressed_flag			;
 	} SD_Card_struct;
 //***********************************************************
 //***********************************************************

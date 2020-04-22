@@ -177,30 +177,30 @@ void NAUR_Main (void) {
 		//***********************************************************
 
 		case SM_CHECK_FLAGS: {
-			if (GPS[2].end_of_UART_packet == 1) {
-				GPS[2].end_of_UART_packet = 0;
-				if ((GPS[2].length_int > 0) && (GPS[2].UART_packet_ready_u8 == 0)) {
+			if (GPS[2].end_of_UART_packet_flag == FLAG_SET) {
+				GPS[2].end_of_UART_packet_flag = FLAG_RESET;
+				if ((GPS[2].length_int > 0) && (GPS[2].UART_packet_ready_flag == FLAG_RESET)) {
 					RTU_2_stop();
 					TIM4_no_signal_Reset();
-					GPS[2].UART_packet_ready_u8 = 1;
+					GPS[2].UART_packet_ready_flag = FLAG_SET;
 				}
 			}
 
-			if (GPS[3].end_of_UART_packet == 1) {
-				GPS[3].end_of_UART_packet = 0;
-				if ((GPS[3].length_int > 0) && (GPS[3].UART_packet_ready_u8 == 0)) {
+			if (GPS[3].end_of_UART_packet_flag == FLAG_SET) {
+				GPS[3].end_of_UART_packet_flag = FLAG_RESET;
+				if ((GPS[3].length_int > 0) && (GPS[3].UART_packet_ready_flag == FLAG_RESET)) {
 					RTU_3_stop();
 					TIM4_no_signal_Reset();
-					GPS[3].UART_packet_ready_u8 = 1;
+					GPS[3].UART_packet_ready_flag = FLAG_SET;
 				}
 			}
 
-			if ((GPS[2].UART_packet_ready_u8 == 1) && (GPS[3].UART_packet_ready_u8 == 1)) {
+			if ((GPS[2].UART_packet_ready_flag == FLAG_SET) && (GPS[3].UART_packet_ready_flag == FLAG_SET)) {
 				sm_stage = SM_PREPARE_FILENAME;
 				break;
 			}
 
-			if ((GPS[3].packet_overflow == 1) || (GPS[3].time_overflow_u8 == 1)) {
+			if ((GPS[3].packet_overflow_flag == FLAG_SET) || (GPS[3].time_overflow_flag == FLAG_SET)) {
 				RTU_3_stop();
 				TIM4_no_signal_Reset();
 				Beep();
@@ -208,13 +208,13 @@ void NAUR_Main (void) {
 				break;
 			}
 
-			if (SD.shudown_button_pressed == 1) {
+			if (SD.shudown_button_pressed_flag == FLAG_SET) {
 				ShutDown();
 				sm_stage = SM_FINISH;	//	but it must Reset by IWDT
 				break;
 			}
 
-			if (GPS[3].no_signal == 1) {
+			if (GPS[3].no_signal_flag == FLAG_SET) {
 				Print_No_signal();
 				sm_stage = SM_FINISH;
 				break;
@@ -264,8 +264,6 @@ void NAUR_Main (void) {
 
 void Print_GPS_to_LCD(GPS_struct * _gps) {
 	//	LCD_SetCursor(0, 95*(_time->seconds_int%2));
-	//	LCD_FillScreen(ILI92_BLACK);
-	//	LCD_SetCursor(0, 0);
 	uint8_t lcd_circle = _gps->length_int / 254;
 	char tmp_str[0xFF];
 	for (int i = 0; i < lcd_circle; i++) {
@@ -285,12 +283,12 @@ void Print_GPS_to_UART(GPS_struct * _gps) {
 	snprintf(DebugString, _gps->length_int +4,"%d) %s", (int)_gps->channel, _gps->string);
 	HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
-	if (_gps->time_overflow_u8 == 1) {
+	if (_gps->time_overflow_flag == FLAG_SET) {
 		sprintf(DebugString,">> ## ch%d Time_overflow ##\r\n", (int)_gps->channel);
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	}
 
-	if (_gps->packet_overflow == 1) {
+	if (_gps->packet_overflow_flag == FLAG_SET) {
 		sprintf(DebugString,">> ## ch%d Packet_overflow ##\r\n", (int)_gps->channel);
 		HAL_UART_Transmit(DebugH.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 	}
@@ -423,12 +421,12 @@ void Beep (void) {
 //***********************************************************
 
 void Clear_GPS_struct(GPS_struct * _gps) {
-	_gps->length_int			= 0 ;
-	_gps->end_of_UART_packet	= 0 ;
-	_gps->no_signal	 			= 0 ;
-	_gps->time_overflow_u8		= 0 ;
-	_gps->packet_overflow		= 0 ;
-	_gps->UART_packet_ready_u8	= 0 ;
+	_gps->length_int				= FLAG_RESET ;
+	_gps->end_of_UART_packet_flag	= FLAG_RESET ;
+	_gps->no_signal_flag	 		= FLAG_RESET ;
+	_gps->time_overflow_flag		= FLAG_RESET ;
+	_gps->packet_overflow_flag		= FLAG_RESET ;
+	_gps->UART_packet_ready_flag	= FLAG_RESET ;
 }
 //***********************************************************
 
@@ -459,7 +457,7 @@ void Read_from_RingBuffer(GPS_struct * _gps, RingBuffer_DMA * _rx_buffer) {
 		_gps->string[_gps->length_int] = RingBuffer_DMA_GetByte(_rx_buffer);
 		_gps->length_int++;
 		if (_gps->length_int > MAX_CHAR_IN_GPS) {
-			_gps->packet_overflow = 1;
+			_gps->packet_overflow_flag = FLAG_SET;
 			return;
 		}
 	}
@@ -467,27 +465,27 @@ void Read_from_RingBuffer(GPS_struct * _gps, RingBuffer_DMA * _rx_buffer) {
 //***********************************************************
 
 void Set_flag_Shudown_button_pressed(void) {
-	SD.shudown_button_pressed	= 1 ;
+	SD.shudown_button_pressed_flag	= FLAG_SET ;
 }
 //***********************************************************
 
 void Set_flag_End_of_UART_2_packet(void) {
-	GPS[2].end_of_UART_packet = 1;
+	GPS[2].end_of_UART_packet_flag = FLAG_SET;
 }
 //***********************************************************
 
 void Set_flag_End_of_UART_3_packet(void) {
-	GPS[3].end_of_UART_packet = 1;
+	GPS[3].end_of_UART_packet_flag = FLAG_SET;
 }
 //***********************************************************
 
 void Set_flag_No_signal(void) {
-	GPS[3].no_signal = 1;
+	GPS[3].no_signal_flag = FLAG_SET;
 }
 //***********************************************************
 
 void Set_flag_time_overflow_package(void) {
-	GPS[3].time_overflow_u8 = 1;
+	GPS[3].time_overflow_flag = FLAG_SET;
 }
 //***********************************************************
 
