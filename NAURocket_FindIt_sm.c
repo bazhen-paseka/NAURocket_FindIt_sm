@@ -247,9 +247,9 @@ void NAUR_Main (void) {
 			Print_GPS_to_UART(&GPS[3]) ;
 			int delta_int = GPS[2].sys_tick_u32 - GPS[3].sys_tick_u32;
 			char DebugString[DEBUG_STRING_SIZE];
-			sprintf(DebugString, "delta_int:%d\r\n", delta_int);
+			sprintf(DebugString, "delta_sys_tick:%d\t", delta_int);
 			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-			if ((delta_int< -500) || (delta_int > 500))  HAL_Delay(500);
+			//	if ((delta_int< -500) || (delta_int > 500))  HAL_Delay(500);
 			Print_SD_Card_to_UART(&SD) ;
 
 			LCD_FillScreen(ILI92_BLACK);
@@ -306,7 +306,7 @@ void Print_GPS_to_LCD(GPS_struct * _gps) {
 
 void Print_GPS_to_UART(GPS_struct * _gps) {
 	char DebugString[DEBUG_STRING_SIZE];
-	snprintf(DebugString, _gps->length_int + 12,"%d) %07d %s", (int)_gps->channel, (int)_gps->sys_tick_u32, _gps->string);
+	snprintf(DebugString, _gps->length_int + 4,"%d) %s", (int)_gps->channel, _gps->string);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	if (_gps->time_overflow_flag == FLAG_SET) {
