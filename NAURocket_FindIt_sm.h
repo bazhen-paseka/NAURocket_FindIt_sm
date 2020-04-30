@@ -65,12 +65,12 @@
 
 	#define	DEBUG_STRING_SIZE		850
 
+	#define GGA_STRING_MAX_SIZE 	99
+	#define GGA_FORCE_START			(103-20)
+	#define GGA_FORCE_LENGTH		75
+	#define GGA_LENGTH_MIN			33
 
-#define GGA_STRING_MAX_SIZE 	99
-#define GGA_FORCE_START			(103-20)
-#define GGA_FORCE_LENGTH		75
-#define GGA_LENGTH_MIN			33
-
+	#define	TIMEZONE				3
 
 	//***********************************************************
 
@@ -95,7 +95,7 @@
 	} GPS_struct;
 //***********************************************************
 
-	typedef struct {
+	typedef struct	{
 		TCHAR 		file_name_char[FILE_NAME_SIZE]	;
 		int			file_name_int					;
 		FRESULT 	write_status_fr					;
@@ -103,8 +103,8 @@
 		Flag_state 	shudown_button_pressed_flag		;
 	} SD_Card_struct;
 //***********************************************************
-	typedef struct
-	{
+
+	typedef struct	{
 		char		string[GGA_STRING_MAX_SIZE];
 		int			Neo6_start;
 		int			Neo6_end;
@@ -114,11 +114,30 @@
 	}	GGA_struct;
 //***********************************************************
 
+	typedef struct	{
+		int 		hour_int	;
+		int 		minutes_int	;
+		int 		seconds_int	;
+		uint8_t		updated_flag;
+	} 	Time_struct;
+//***********************************************************
+
+	typedef struct	{
+		uint8_t 	calc_u8				;
+		uint8_t 	glue_u8				;
+		uint8_t 	status_flag			;
+	}	CheckSum_struct;
+
+//***********************************************************
+
+
 	FRESULT 				fres					;
 	GPS_state_machine 		sm_stage				;
 	RESULT_ENUM 			result					;
 	GPS_struct 				GPS[GPS_CH_QNT]			;
 	GGA_struct 				GGA[GPS_CH_QNT]			;
+	CheckSum_struct 		CS[GPS_CH_QNT]			;
+	Time_struct 			Time[GPS_CH_QNT]		;
 	SD_Card_struct 			SD						;
 	RingBuffer_DMA 			rx_buffer[GPS_CH_QNT]	;
 	Debug_struct 			Debug_ch				;

@@ -41,10 +41,12 @@
 
 	void Check_bytes_in_UART_packet (GPS_channel _channel) ;
 
-	uint8_t Find_Begin_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga );
-	void Copy_GGA_Force(GPS_struct * _gps, GGA_struct* _gga );
-	uint8_t Find_End_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga ) ;
-	void Copy_GGA_Correct(GPS_struct * _gps, GGA_struct* _gga ) ;
+	uint8_t Find_Begin_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga )							;
+	uint8_t Find_End_of_GGA_string	(GPS_struct * _gps, GGA_struct* _gga ) 							;
+	void Copy_GGA_Force				(GPS_struct * _gps, GGA_struct* _gga )							;
+	void Copy_GGA_Correct			(GPS_struct * _gps, GGA_struct* _gga ) 							;
+	uint8_t Calc_SheckSum_GGA		(GPS_struct * _gps, GGA_struct* _gga, CheckSum_struct * _cs )	;
+	void Get_time_from_GGA_string	(GGA_struct * _gga, Time_struct * _time, SD_Card_struct * _sd)	;
 
 //***********************************************************
 //***********************************************************
@@ -268,6 +270,13 @@ void NAUR_Main (void) {
 		//--------------------------------------------------------
 
 		case SM_CALC_SHECKSUM:	{
+			result = Calc_SheckSum_GGA(&GPS[GPS_CH_2], &GGA[GPS_CH_2], &CS[GPS_CH_2]);
+			result = Calc_SheckSum_GGA(&GPS[GPS_CH_3], &GGA[GPS_CH_3], &CS[GPS_CH_3]);
+			if ( result == R_OK )
+			{
+				Get_time_from_GGA_string(&GGA[GPS_CH_2], &Time[GPS_CH_2], &SD);
+				Get_time_from_GGA_string(&GGA[GPS_CH_3], &Time[GPS_CH_3], &SD);
+			}
 			sm_stage = SM_PREPARE_FILENAME;
 		} break;
 		//--------------------------------------------------------
@@ -626,5 +635,58 @@ void Copy_GGA_Correct(GPS_struct * _gps, GGA_struct* _gga ) {
 	//memcpy(_gga->string, &_neo6->string[_gga->Neo6_start], _gga->length    );
 	       memcpy(tmp_str, &_gps->string[_gga->Neo6_start], _gga->length - 2);
 	snprintf(_gga->string, _gga->length + 1 ,"%s\r\n", tmp_str);
+}
+//***********************************************************
+
+uint8_t Calc_SheckSum_GGA(GPS_struct * _gps, GGA_struct * _gga, CheckSum_struct * _cs ) {
+	#define CS_SIZE	4
+	char cs_glue_string[CS_SIZE];
+
+	//	glue:
+
+	memset(cs_glue_string, 0, CS_SIZE);
+	memcpy(cs_glue_string, &_gga->string[_gga->length - 4], 2);
+	_cs->glue_u8 = strtol(cs_glue_string, NULL, 16);
+
+	//	calc:
+	_cs->calc_u8 = _gga->string[1];
+	for (int i=2; i<(_gga->length - 5); i++) {
+		_cs->calc_u8 ^= _gga->string[i];
+	}
+
+	//	compare:
+	if (_cs->calc_u8 == _cs->glue_u8) {
+		_cs->status_flag = 1;
+		char DebugString[DEBUG_STRING_SIZE];
+		sprintf(DebugString,"ch%d: cs:%d %X/%X \r\n", (int)_gps->channel, (int)_cs->status_flag, (int)_cs->calc_u8, (int)_cs->glue_u8 );
+		HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+		return 1;
+	}
+	return 0;
+}
+//***********************************************************
+
+void Get_time_from_GGA_string(GGA_struct * _gga, Time_struct * _time, SD_Card_struct * _sd) {
+	if (_time->updated_flag == 1) {
+		return;
+	}
+
+	_time->updated_flag = 1;
+
+	#define TIME_SIZE	5
+	char time_string[TIME_SIZE];
+
+	memset(time_string,0,TIME_SIZE);
+
+	memcpy(time_string, &_gga->string[7], 2);
+	_time->hour_int = atoi(time_string) + TIMEZONE;
+
+	memcpy(time_string, &_gga->string[9], 2);
+	_time->minutes_int = atoi(time_string);
+
+	memcpy(time_string, &_gga->string[11], 2);
+	_time->seconds_int = atoi(time_string);
+
+	_sd->file_name_int = _time->hour_int*10000 + _time->minutes_int*100 + _time->seconds_int ;
 }
 //***********************************************************
