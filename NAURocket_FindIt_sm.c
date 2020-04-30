@@ -41,6 +41,10 @@
 
 	void Check_bytes_in_UART_packet (GPS_channel _channel) ;
 
+	uint8_t Find_Begin_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga );
+	void Copy_GGA_Force(GPS_struct * _gps, GGA_struct* _gga );
+
+
 //***********************************************************
 //***********************************************************
 
@@ -190,21 +194,21 @@ void NAUR_Main (void) {
 			Check_bytes_in_UART_packet(GPS_CH_3);
 
 			if ((GPS[2].UART_packet_ready_flag == FLAG_SET) && (GPS[3].UART_packet_ready_flag == FLAG_SET)) {
-				sm_stage = SM_PREPARE_FILENAME;
+				sm_stage = SM_FIND_GGA;
 				break;
 			}
 
 			if ((GPS[GPS_CH_2].packet_overflow_flag == FLAG_SET) || (GPS[GPS_CH_2].time_overflow_flag == FLAG_SET)) {
 				RTU_stop(GPS_CH_2);
 				Beep();
-				sm_stage = SM_PREPARE_FILENAME;
+				sm_stage = SM_FIND_GGA;
 				break;
 			}
 
 			if ((GPS[GPS_CH_3].packet_overflow_flag == FLAG_SET) || (GPS[GPS_CH_3].time_overflow_flag == FLAG_SET)) {
 				RTU_stop(GPS_CH_3);
 				Beep();
-				sm_stage = SM_PREPARE_FILENAME;
+				sm_stage = SM_FIND_GGA;
 				break;
 			}
 
@@ -229,6 +233,34 @@ void NAUR_Main (void) {
 			sm_stage = SM_READ_FROM_RINGBUFFER;
 		} break;
 	//--------------------------------------------------------
+
+		case SM_FIND_GGA:		{
+			result = Find_Begin_of_GGA_string(&GPS[GPS_CH_2], &GGA[GPS_CH_2]);	/// tut kasha
+			result = Find_Begin_of_GGA_string(&GPS[GPS_CH_3], &GGA[GPS_CH_3]);
+
+			if ( result == R_OK)
+			{
+				sm_stage = SM_FIND_ASTERISK;
+			}
+			else
+			{
+				Copy_GGA_Force(&GPS[GPS_CH_2], &GGA[GPS_CH_2]);
+				Copy_GGA_Force(&GPS[GPS_CH_3], &GGA[GPS_CH_3]);
+				sm_stage = SM_PREPARE_FILENAME;
+			}
+		} break;
+		//--------------------------------------------------------
+
+		case SM_FIND_ASTERISK:	{
+			sm_stage = SM_CALC_SHECKSUM;
+		} break;
+		//--------------------------------------------------------
+
+		case SM_CALC_SHECKSUM:	{
+			sm_stage = SM_PREPARE_FILENAME;
+		} break;
+		//--------------------------------------------------------
+
 
 		case SM_PREPARE_FILENAME: {
 			Prepare_filename(&SD);
@@ -526,5 +558,29 @@ void Print_No_signal(GPS_channel _channel) {
 	LCD_SetCursor(0, 0);
 	LCD_Printf("%s", DebugString);
 	Beep();
+}
+//***********************************************************
+
+uint8_t Find_Begin_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga ) {
+	for (int i=2; i<= _gps->length_int; i++) {
+		if (memcmp(&_gps->string[i-2], "GGA" ,3) == 0) {
+			_gga->Neo6_start = i - 5;	//	$GPGGA
+			_gga->beginning_chars = 1;	//	012345
+			char DebugString[DEBUG_STRING_SIZE];
+			sprintf(DebugString,"ch%d: find begin_of_GGA - Ok. \r\n", (int)_gps->channel);
+			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+			return 1;
+		}
+	}
+	return 0;
+}
+//***********************************************************
+
+void Copy_GGA_Force(GPS_struct * _gps, GGA_struct* _gga ) {
+	char tmp_str[GGA_FORCE_LENGTH];
+	memset(tmp_str, 0, GGA_FORCE_LENGTH);
+	//memcpy(_gga->string, &_neo6->string[GGA_FORCE_START], GGA_FORCE_LENGTH    );
+	       memcpy(tmp_str, &_gps->string[GGA_FORCE_START], GGA_FORCE_LENGTH - 2);
+	snprintf(_gga->string, GGA_FORCE_LENGTH + 1,"%s\r\n", tmp_str);
 }
 //***********************************************************

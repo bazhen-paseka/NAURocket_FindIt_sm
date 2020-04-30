@@ -37,6 +37,9 @@
 		SM_START					,
 		SM_READ_FROM_RINGBUFFER		,
 		SM_CHECK_FLAGS				,
+		SM_FIND_GGA					,
+		SM_FIND_ASTERISK			,
+		SM_CALC_SHECKSUM			,
 		SM_PREPARE_FILENAME			,
 		SM_WRITE_SDCARD				,
 		SM_PRINT_ALL_INFO			,
@@ -61,6 +64,13 @@
 	#define RX_BUFFER_SIZE 			0xFF
 
 	#define	DEBUG_STRING_SIZE		850
+
+
+#define GGA_STRING_MAX_SIZE 	99
+#define GGA_FORCE_START			(103-20)
+#define GGA_FORCE_LENGTH		75
+#define GGA_LENGTH_MIN			33
+
 
 	//***********************************************************
 
@@ -93,12 +103,22 @@
 		Flag_state 	shudown_button_pressed_flag		;
 	} SD_Card_struct;
 //***********************************************************
+	typedef struct
+	{
+		char		string[GGA_STRING_MAX_SIZE];
+		int			Neo6_start;
+		int			Neo6_end;
+		int			length;
+		uint8_t 	beginning_chars;
+		uint8_t 	ending_char;
+	}	GGA_struct;
 //***********************************************************
 
 	FRESULT 				fres					;
 	GPS_state_machine 		sm_stage				;
 	RESULT_ENUM 			result					;
 	GPS_struct 				GPS[GPS_CH_QNT]			;
+	GGA_struct 				GGA[GPS_CH_QNT]			;
 	SD_Card_struct 			SD						;
 	RingBuffer_DMA 			rx_buffer[GPS_CH_QNT]	;
 	Debug_struct 			Debug_ch				;
