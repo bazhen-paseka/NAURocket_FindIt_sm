@@ -43,7 +43,8 @@
 
 	uint8_t Find_Begin_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga );
 	void Copy_GGA_Force(GPS_struct * _gps, GGA_struct* _gga );
-
+	uint8_t Find_End_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga ) ;
+	void Copy_GGA_Correct(GPS_struct * _gps, GGA_struct* _gga ) ;
 
 //***********************************************************
 //***********************************************************
@@ -252,7 +253,17 @@ void NAUR_Main (void) {
 		//--------------------------------------------------------
 
 		case SM_FIND_ASTERISK:	{
-			sm_stage = SM_CALC_SHECKSUM;
+			result = Find_End_of_GGA_string(&GPS[GPS_CH_2], &GGA[GPS_CH_2]);
+			result = Find_End_of_GGA_string(&GPS[GPS_CH_3], &GGA[GPS_CH_3]);
+			if ( result == R_OK ) {
+				Copy_GGA_Correct(&GPS[GPS_CH_2], &GGA[GPS_CH_2]);
+				Copy_GGA_Correct(&GPS[GPS_CH_3], &GGA[GPS_CH_3]);
+				sm_stage = SM_CALC_SHECKSUM;
+			} else {
+				Copy_GGA_Force(&GPS[GPS_CH_2], &GGA[GPS_CH_2]);
+				Copy_GGA_Force(&GPS[GPS_CH_3], &GGA[GPS_CH_3]);
+				sm_stage = SM_PREPARE_FILENAME;
+			}
 		} break;
 		//--------------------------------------------------------
 
@@ -582,5 +593,38 @@ void Copy_GGA_Force(GPS_struct * _gps, GGA_struct* _gga ) {
 	//memcpy(_gga->string, &_neo6->string[GGA_FORCE_START], GGA_FORCE_LENGTH    );
 	       memcpy(tmp_str, &_gps->string[GGA_FORCE_START], GGA_FORCE_LENGTH - 2);
 	snprintf(_gga->string, GGA_FORCE_LENGTH + 1,"%s\r\n", tmp_str);
+}
+//***********************************************************
+
+
+uint8_t Find_End_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga ) {
+	if (_gga->beginning_chars == 0)	{
+		return 0;
+	}
+
+	for (int i=_gga->Neo6_start; i<=_gps->length_int; i++) {
+		if (_gps->string[i] == '*') {
+			_gga->Neo6_end = i + 5;
+			_gga->length = _gga->Neo6_end - _gga->Neo6_start;
+			if ((_gga->length < GGA_LENGTH_MIN) || (_gga->length > GGA_STRING_MAX_SIZE)) {
+				return 0;
+			}
+			_gga->ending_char = 1;
+			char DebugString[DEBUG_STRING_SIZE];
+			sprintf(DebugString,"ch%d: find end_of_GGA - Ok. \r\n", (int)_gps->channel);
+			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+			return 1;
+		}
+	}
+	return 0;
+}
+//***********************************************************
+
+void Copy_GGA_Correct(GPS_struct * _gps, GGA_struct* _gga ) {
+	char tmp_str[GGA_STRING_MAX_SIZE];
+	memset(tmp_str, 0, GGA_STRING_MAX_SIZE);
+	//memcpy(_gga->string, &_neo6->string[_gga->Neo6_start], _gga->length    );
+	       memcpy(tmp_str, &_gps->string[_gga->Neo6_start], _gga->length - 2);
+	snprintf(_gga->string, _gga->length + 1 ,"%s\r\n", tmp_str);
 }
 //***********************************************************
