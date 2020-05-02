@@ -109,8 +109,8 @@
 		int			Neo6_start;
 		int			Neo6_end;
 		int			length;
-		uint8_t 	beginning_chars;
-		uint8_t 	ending_char;
+		uint8_t 	beginning_chars_present;
+		uint8_t 	ending_char_present;
 	}	GGA_struct;
 //***********************************************************
 
