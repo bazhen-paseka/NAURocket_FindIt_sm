@@ -710,20 +710,28 @@ void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps) {
 	uint8_t pole_u8 = 0;
 	#define	GPS_POLE_SIZE	15
 	#define	GPS_POLE_QNT	15
-	uint8_t gps_string[GPS_POLE_QNT][GPS_POLE_SIZE];
+	char gps_string[GPS_POLE_QNT][GPS_POLE_SIZE];
 
 	for (int i=0; i < GPS_POLE_QNT; i++) {
 		memset(gps_string[i],0,GPS_POLE_SIZE);
 	}
+
 	uint8_t previous_pole_position_u8 = 0;
 	for (int position = _gga->Neo6_start; position < _gga->Neo6_end; position++) {
 		if (_gga->string[position] == ',') {
 			memcpy(gps_string[pole_u8], &_gga->string[previous_pole_position_u8], (position - previous_pole_position_u8));
-			sprintf(DebugString,"pole%d: %s\r\n",pole_u8, gps_string[pole_u8]);
+			sprintf(DebugString,"%d)%s ",pole_u8, gps_string[pole_u8]);
 			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			pole_u8++;
 			previous_pole_position_u8 = position+1;
 			//_time->hour_int = atoi(time_string) + TIMEZONE;
 		}
 	}
+
+	double coord_N_dbl = atof (gps_string[2]);
+	double coord_E_dbl = atof (gps_string[4]);
+	double coord_H_dbl = atof (gps_string[9]);
+	sprintf(DebugString,"\r\nN:%f E:%f h:%f\r\n", coord_N_dbl, coord_E_dbl, coord_H_dbl);
+
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 }
