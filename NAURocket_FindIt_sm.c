@@ -48,7 +48,8 @@
 	uint8_t Calc_SheckSum_GGA		(GPS_struct * _gps, GGA_struct* _gga, CheckSum_struct * _cs )	;
 	void Get_time_from_GGA_string	(GGA_struct * _gga, Time_struct * _time, SD_Card_struct * _sd)	;
 
-	void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps);
+	void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct * _coord)		;
+	void Print_Coordinates_to_UART(Coordinates_struct * _coord, GPS_struct * _gps) 					;
 
 //***********************************************************
 //***********************************************************
@@ -279,8 +280,8 @@ void NAUR_Main (void) {
 				Get_time_from_GGA_string(&GGA[GPS_CH_2], &Time[GPS_CH_2], &SD);
 				Get_time_from_GGA_string(&GGA[GPS_CH_3], &Time[GPS_CH_3], &SD);
 
-				Parse_GGA_string(&GGA[GPS_CH_2], &GPS[GPS_CH_2]);
-				Parse_GGA_string(&GGA[GPS_CH_3], &GPS[GPS_CH_3]);
+				Parse_GGA_string(&GGA[GPS_CH_2], &GPS[GPS_CH_2], &Coord[GPS_CH_2]);
+				Parse_GGA_string(&GGA[GPS_CH_3], &GPS[GPS_CH_3], &Coord[GPS_CH_3]);
 			}
 			sm_stage = SM_PREPARE_FILENAME;
 		} break;
@@ -302,6 +303,10 @@ void NAUR_Main (void) {
 		case SM_PRINT_ALL_INFO: {
 			Print_GPS_to_UART(&GPS[2]) ;
 			Print_GPS_to_UART(&GPS[3]) ;
+
+			Print_Coordinates_to_UART(&Coord[GPS_CH_2], &GPS[GPS_CH_2]);
+			Print_Coordinates_to_UART(&Coord[GPS_CH_3], &GPS[GPS_CH_3]);
+
 			int delta_int = GPS[2].sys_tick_u32 - GPS[3].sys_tick_u32;
 			char DebugString[DEBUG_STRING_SIZE];
 			sprintf(DebugString, "delta_sys_tick:%d\t", delta_int);
@@ -378,12 +383,25 @@ void Print_GPS_to_UART(GPS_struct * _gps) {
 }
 //***********************************************************
 
+void Print_Coordinates_to_UART(Coordinates_struct * _coord, GPS_struct * _gps) {
+	char DebugString[DEBUG_STRING_SIZE];
+	sprintf(DebugString,"ch%d Lat:%d Lon:%d Alt:%d sat:%d\r\n",
+		(int)_gps->channel,
+		(int)_coord->latitude_N_u32,
+		(int)_coord->longitude_E_u32,
+		(int)_coord->altitude_u32,
+		(int)_coord->satelite_qnt_u8);
+
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+}
+//***********************************************************
+
 void Print_SD_Card_to_UART(SD_Card_struct * _sd ) {
 	char DebugString[DEBUG_STRING_SIZE];
 	sprintf(DebugString,">> file_name:%s; size: %d; SD_write: %d\r\n\r\n",
-												_sd->file_name_char,
-												(int)_sd->file_size,
-												_sd->write_status_fr		);
+		_sd->file_name_char,
+		(int)_sd->file_size,
+		_sd->write_status_fr);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 }
 //***********************************************************
@@ -591,9 +609,9 @@ uint8_t Find_Begin_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga ) {
 		if (memcmp(&_gps->string[i-2], "GGA" ,3) == 0) {
 			_gga->Neo6_start = i - 5;	//	$GPGGA
 			_gga->beginning_chars_present = 1;	//	012345
-			char DebugString[DEBUG_STRING_SIZE];
-			sprintf(DebugString,"ch%d: find begin_of_GGA - Ok. \r\n", (int)_gps->channel);
-			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+//			char DebugString[DEBUG_STRING_SIZE];
+//			sprintf(DebugString,"ch%d: find begin_of_GGA - Ok. \r\n", (int)_gps->channel);
+//			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			return 1;
 		}
 	}
@@ -624,9 +642,9 @@ uint8_t Find_End_of_GGA_string(GPS_struct * _gps, GGA_struct* _gga ) {
 				return 0;
 			}
 			_gga->ending_char_present = 1;
-			char DebugString[DEBUG_STRING_SIZE];
-			sprintf(DebugString,"ch%d: find end_of_GGA - Ok. \r\n", (int)_gps->channel);
-			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+//			char DebugString[DEBUG_STRING_SIZE];
+//			sprintf(DebugString,"ch%d: find end_of_GGA - Ok. \r\n", (int)_gps->channel);
+//			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			return 1;
 		}
 	}
@@ -662,9 +680,9 @@ uint8_t Calc_SheckSum_GGA(GPS_struct * _gps, GGA_struct * _gga, CheckSum_struct 
 	//	compare:
 	if (_cs->calc_u8 == _cs->glue_u8) {
 		_cs->status_flag = 1;
-		char DebugString[DEBUG_STRING_SIZE];
-		sprintf(DebugString,"ch%d: cs:%d %X/%X \r\n", (int)_gps->channel, (int)_cs->status_flag, (int)_cs->calc_u8, (int)_cs->glue_u8 );
-		HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+//		char DebugString[DEBUG_STRING_SIZE];
+//		sprintf(DebugString,"ch%d: cs:%d %X/%X \r\n", (int)_gps->channel, (int)_cs->status_flag, (int)_cs->calc_u8, (int)_cs->glue_u8 );
+//		HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		return 1;
 	}
 	return 0;
@@ -696,16 +714,16 @@ void Get_time_from_GGA_string(GGA_struct * _gga, Time_struct * _time, SD_Card_st
 }
 //***********************************************************
 
-void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps) {
-	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,"ch%d Neo6_start %d Neo6_end %d length %d beginning_chars_present %d ending_char_present %d \r\n",
-			(int)_gps->channel,
-			(int)_gga->Neo6_start,
-			(int)_gga->Neo6_end,
-			(int)_gga->length,
-			(int)_gga->beginning_chars_present,
-			(int)_gga->ending_char_present );
-	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct * _coord) {
+//	char DebugString[DEBUG_STRING_SIZE];
+//	sprintf(DebugString,"ch%d Neo6_start %d Neo6_end %d length %d beginning_chars_present %d ending_char_present %d \r\n",
+//			(int)_gps->channel,
+//			(int)_gga->Neo6_start,
+//			(int)_gga->Neo6_end,
+//			(int)_gga->length,
+//			(int)_gga->beginning_chars_present,
+//			(int)_gga->ending_char_present );
+//	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	uint8_t pole_u8 = 0;
 	#define	GPS_POLE_SIZE	15
@@ -720,8 +738,8 @@ void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps) {
 	for (int position = _gga->Neo6_start; position < _gga->Neo6_end; position++) {
 		if (_gga->string[position] == ',') {
 			memcpy(gps_string[pole_u8], &_gga->string[previous_pole_position_u8], (position - previous_pole_position_u8));
-			sprintf(DebugString,"%d)%s ",pole_u8, gps_string[pole_u8]);
-			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+//			sprintf(DebugString,"%d)%s ",pole_u8, gps_string[pole_u8]);
+//			HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 			pole_u8++;
 			previous_pole_position_u8 = position+1;
 			//_time->hour_int = atoi(time_string) + TIMEZONE;
@@ -730,8 +748,14 @@ void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps) {
 
 	double coord_N_dbl = atof (gps_string[2]);
 	double coord_E_dbl = atof (gps_string[4]);
+	int satelite_qnt_i = atoi (gps_string[7]);
 	double coord_H_dbl = atof (gps_string[9]);
-	sprintf(DebugString,"\r\nN:%f E:%f h:%f\r\n", coord_N_dbl, coord_E_dbl, coord_H_dbl);
 
-	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	_coord->latitude_N_u32  = (uint32_t)( coord_N_dbl * 100) ;
+	_coord->longitude_E_u32 = (uint32_t)( coord_E_dbl * 100) ;
+	_coord->altitude_u32	= (uint32_t)( coord_H_dbl *   1) ;
+	_coord->satelite_qnt_u8 =  (uint8_t)( satelite_qnt_i   ) ;
+
+//	sprintf(DebugString,"ch%d N:%f E:%f h:%04.02f stl:%d\r\n", (int)_gps->channel, coord_N_dbl, coord_E_dbl, coord_H_dbl, satelite_qnt_i);
+//	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 }

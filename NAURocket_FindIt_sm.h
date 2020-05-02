@@ -2,15 +2,16 @@
 #define NAUROCKET_FINDIT_SM_H_INCLUDED
 
 /***********************************/
-#include <NAURocket_FindIt_local_config.h>
-#include "main.h"
-#include "dma.h"
-#include "fatfs.h"
-#include "iwdg.h"
-#include "spi.h"
-#include "tim.h"
-#include "usart.h"
-#include "gpio.h"
+
+	#include <NAURocket_FindIt_local_config.h>
+	#include "main.h"
+	#include "dma.h"
+	#include "fatfs.h"
+	#include "iwdg.h"
+	#include "spi.h"
+	#include "tim.h"
+	#include "usart.h"
+	#include "gpio.h"
 
 	#include <stdio.h>
 	#include <string.h>
@@ -26,14 +27,13 @@
 	} RESULT_ENUM;
 //***********************************************************
 
-	typedef enum
-	{
+	typedef enum {
 	  FLAG_RESET = 0,
 	  FLAG_SET
 	} Flag_state;
 //***********************************************************
-	typedef enum
-	{
+
+	typedef enum {
 		SM_START					,
 		SM_READ_FROM_RINGBUFFER		,
 		SM_CHECK_FLAGS				,
@@ -47,8 +47,7 @@
 	} GPS_state_machine;
 //***********************************************************
 
-	typedef enum
-	{
+	typedef enum {
 		GPS_CH_0					,
 		GPS_CH_1					,
 		GPS_CH_2					,
@@ -127,9 +126,15 @@
 		uint8_t 	glue_u8				;
 		uint8_t 	status_flag			;
 	}	CheckSum_struct;
-
 //***********************************************************
 
+	typedef struct	{
+		uint32_t 	latitude_N_u32		;
+		uint32_t 	longitude_E_u32		;
+		uint32_t 	altitude_u32		;
+		uint8_t		satelite_qnt_u8		;
+	}	Coordinates_struct;
+//***********************************************************
 
 	FRESULT 				fres					;
 	GPS_state_machine 		sm_stage				;
@@ -138,6 +143,7 @@
 	GGA_struct 				GGA[GPS_CH_QNT]			;
 	CheckSum_struct 		CS[GPS_CH_QNT]			;
 	Time_struct 			Time[GPS_CH_QNT]		;
+	Coordinates_struct		Coord[GPS_CH_QNT]		;
 	SD_Card_struct 			SD						;
 	RingBuffer_DMA 			rx_buffer[GPS_CH_QNT]	;
 	Debug_struct 			Debug_ch				;
