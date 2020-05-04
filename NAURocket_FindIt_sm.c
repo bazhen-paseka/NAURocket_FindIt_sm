@@ -48,8 +48,12 @@
 	uint8_t Calc_SheckSum_GGA		(GPS_struct * _gps, GGA_struct* _gga, CheckSum_struct * _cs )	;
 	void Get_time_from_GGA_string	(GGA_struct * _gga, Time_struct * _time, SD_Card_struct * _sd)	;
 
-	void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct * _coord)		;
-	void Print_Coordinates_to_UART(Coordinates_struct * _coord, GPS_struct * _gps) 					;
+	void Parse_GGA_string			(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct * _coord)		;
+	void Print_Coord_DMM_to_UART	(Coordinates_struct * _coord, GPS_struct * _gps) 					;
+
+	void Convert_from_DMM_to_DD		(Coordinates_struct * _coord ) ;
+	void Print_Coord_DD_to_UART		(Coordinates_struct * _coord, GPS_struct * _gps) 					;
+
 
 //***********************************************************
 //***********************************************************
@@ -304,8 +308,14 @@ void NAUR_Main (void) {
 			Print_GPS_to_UART(&GPS[2]) ;
 			Print_GPS_to_UART(&GPS[3]) ;
 
-			Print_Coordinates_to_UART(&Coord[GPS_CH_2], &GPS[GPS_CH_2]);
-			Print_Coordinates_to_UART(&Coord[GPS_CH_3], &GPS[GPS_CH_3]);
+//			Print_Coord_DMM_to_UART(&Coord[GPS_CH_2], &GPS[GPS_CH_2]);
+//			Print_Coord_DMM_to_UART(&Coord[GPS_CH_3], &GPS[GPS_CH_3]);
+
+			Convert_from_DMM_to_DD(&Coord[GPS_CH_2]) ;
+			Convert_from_DMM_to_DD(&Coord[GPS_CH_3]) ;
+
+			Print_Coord_DD_to_UART(&Coord[GPS_CH_2], &GPS[GPS_CH_2]);
+			Print_Coord_DD_to_UART(&Coord[GPS_CH_3], &GPS[GPS_CH_3]);
 
 			int delta_int = GPS[2].sys_tick_u32 - GPS[3].sys_tick_u32;
 			char DebugString[DEBUG_STRING_SIZE];
@@ -383,15 +393,26 @@ void Print_GPS_to_UART(GPS_struct * _gps) {
 }
 //***********************************************************
 
-void Print_Coordinates_to_UART(Coordinates_struct * _coord, GPS_struct * _gps) {
+void Print_Coord_DMM_to_UART(Coordinates_struct * _coord, GPS_struct * _gps) {
 	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,"ch%d Lat:%f Lon:%f Alt:%f sat:%d\r\n",
+	sprintf(DebugString,"ch%d\tLat:%4.5f\tLon:%5.5f\tAlt:%3.1f\tsat:%d\r\n",
 		(int)_gps->channel,
 		_coord->latitude_DMM_dbl,
 		_coord->longitude_DMM_dbl,
 		_coord->altitude_dbl,
 		_coord->satelite_qnt_int);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+}
+//***********************************************************
 
+void Print_Coord_DD_to_UART(Coordinates_struct * _coord, GPS_struct * _gps) {
+	char DebugString[DEBUG_STRING_SIZE];
+	sprintf(DebugString,"ch%d\tLat:%f\tLon:%f\tAlt:%3.1f\tsat:%d\r\n",
+		(int)_gps->channel,
+		_coord->latitude_DD_dbl,
+		_coord->longitude_DD_dbl,
+		_coord->altitude_dbl,
+		_coord->satelite_qnt_int);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 }
 //***********************************************************
@@ -666,7 +687,6 @@ uint8_t Calc_SheckSum_GGA(GPS_struct * _gps, GGA_struct * _gga, CheckSum_struct 
 	char cs_glue_string[CS_SIZE];
 
 	//	glue:
-
 	memset(cs_glue_string, 0, CS_SIZE);
 	memcpy(cs_glue_string, &_gga->string[_gga->length - 4], 2);
 	_cs->glue_u8 = strtol(cs_glue_string, NULL, 16);
@@ -680,9 +700,6 @@ uint8_t Calc_SheckSum_GGA(GPS_struct * _gps, GGA_struct * _gga, CheckSum_struct 
 	//	compare:
 	if (_cs->calc_u8 == _cs->glue_u8) {
 		_cs->status_flag = 1;
-//		char DebugString[DEBUG_STRING_SIZE];
-//		sprintf(DebugString,"ch%d: cs:%d %X/%X \r\n", (int)_gps->channel, (int)_cs->status_flag, (int)_cs->calc_u8, (int)_cs->glue_u8 );
-//		HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 		return 1;
 	}
 	return 0;
@@ -735,9 +752,28 @@ void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct *
 			//_time->hour_int = atoi(time_string) + TIMEZONE;
 		}
 	}
-
 	_coord->latitude_DMM_dbl	= atof (gps_string[2]);
 	_coord->longitude_DMM_dbl	= atof (gps_string[4]);
 	_coord->altitude_dbl		= atof (gps_string[9]);
 	_coord->satelite_qnt_int	= atoi (gps_string[7]);
 }
+//***********************************************************
+
+void Convert_from_DMM_to_DD(Coordinates_struct * _coord ) {
+
+	uint32_t	   lat_u32	= (uint32_t)(_coord->latitude_DMM_dbl * 100000.0)	;	//	*10^5
+	uint32_t	lat_D0_u32  = lat_u32 / 10000000UL								;	//	/10^7
+	uint32_t	lat_D1_u32	= lat_u32 -	(lat_D0_u32 * 10000000UL)					;	//	*10^7
+	_coord->latitude_DD_dbl	= (double)lat_D0_u32 + (double)lat_D1_u32/6000000.0	;	//	/60 * 10^5
+
+//	char DebugString[DEBUG_STRING_SIZE];
+//	sprintf(DebugString,"%d %d %d %f \r\n", (int)lat_u32, (int)lat_D0_u32, (int)lat_D1_u32, _coord->latitude_DD_dbl );
+//	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+
+	uint32_t	   long_u32	= (uint32_t)(_coord->longitude_DMM_dbl * 100000.0)		;	//	*10^5
+	uint32_t	long_D0_u32 = long_u32 / 10000000UL									;	//	/10^7
+	uint32_t	long_D1_u32	= long_u32 -	(long_D0_u32 * 10000000UL)				;	//	*10^7
+	_coord->longitude_DD_dbl= (double)long_D0_u32 + (double)long_D1_u32/6000000.0	;	//	/60 * 10^5
+
+}
+//***********************************************************

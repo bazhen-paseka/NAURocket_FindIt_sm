@@ -133,6 +133,8 @@
 		double 	longitude_DMM_dbl	;
 		double 	altitude_dbl		;
 		int		satelite_qnt_int	;
+		double 	latitude_DD_dbl		;
+		double 	longitude_DD_dbl	;
 	}	Coordinates_struct;
 //***********************************************************
 
