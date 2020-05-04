@@ -129,10 +129,10 @@
 //***********************************************************
 
 	typedef struct	{
-		uint32_t 	latitude_N_u32		;
-		uint32_t 	longitude_E_u32		;
-		uint32_t 	altitude_u32		;
-		uint8_t		satelite_qnt_u8		;
+		double 	latitude_DMM_dbl	;
+		double 	longitude_DMM_dbl	;
+		double 	altitude_dbl		;
+		int		satelite_qnt_int	;
 	}	Coordinates_struct;
 //***********************************************************
 

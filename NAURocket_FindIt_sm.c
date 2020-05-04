@@ -385,12 +385,12 @@ void Print_GPS_to_UART(GPS_struct * _gps) {
 
 void Print_Coordinates_to_UART(Coordinates_struct * _coord, GPS_struct * _gps) {
 	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,"ch%d Lat:%d Lon:%d Alt:%d sat:%d\r\n",
+	sprintf(DebugString,"ch%d Lat:%f Lon:%f Alt:%f sat:%d\r\n",
 		(int)_gps->channel,
-		(int)_coord->latitude_N_u32,
-		(int)_coord->longitude_E_u32,
-		(int)_coord->altitude_u32,
-		(int)_coord->satelite_qnt_u8);
+		_coord->latitude_DMM_dbl,
+		_coord->longitude_DMM_dbl,
+		_coord->altitude_dbl,
+		_coord->satelite_qnt_int);
 
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 }
@@ -715,16 +715,6 @@ void Get_time_from_GGA_string(GGA_struct * _gga, Time_struct * _time, SD_Card_st
 //***********************************************************
 
 void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct * _coord) {
-//	char DebugString[DEBUG_STRING_SIZE];
-//	sprintf(DebugString,"ch%d Neo6_start %d Neo6_end %d length %d beginning_chars_present %d ending_char_present %d \r\n",
-//			(int)_gps->channel,
-//			(int)_gga->Neo6_start,
-//			(int)_gga->Neo6_end,
-//			(int)_gga->length,
-//			(int)_gga->beginning_chars_present,
-//			(int)_gga->ending_char_present );
-//	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-
 	uint8_t pole_u8 = 0;
 	#define	GPS_POLE_SIZE	15
 	#define	GPS_POLE_QNT	15
@@ -746,16 +736,8 @@ void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct *
 		}
 	}
 
-	double coord_N_dbl = atof (gps_string[2]);
-	double coord_E_dbl = atof (gps_string[4]);
-	int satelite_qnt_i = atoi (gps_string[7]);
-	double coord_H_dbl = atof (gps_string[9]);
-
-	_coord->latitude_N_u32  = (uint32_t)( coord_N_dbl * 100) ;
-	_coord->longitude_E_u32 = (uint32_t)( coord_E_dbl * 100) ;
-	_coord->altitude_u32	= (uint32_t)( coord_H_dbl *   1) ;
-	_coord->satelite_qnt_u8 =  (uint8_t)( satelite_qnt_i   ) ;
-
-//	sprintf(DebugString,"ch%d N:%f E:%f h:%04.02f stl:%d\r\n", (int)_gps->channel, coord_N_dbl, coord_E_dbl, coord_H_dbl, satelite_qnt_i);
-//	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+	_coord->latitude_DMM_dbl	= atof (gps_string[2]);
+	_coord->longitude_DMM_dbl	= atof (gps_string[4]);
+	_coord->altitude_dbl		= atof (gps_string[9]);
+	_coord->satelite_qnt_int	= atoi (gps_string[7]);
 }
