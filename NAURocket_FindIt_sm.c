@@ -54,6 +54,7 @@
 	void Convert_from_DMM_to_DD		(Coordinates_struct * _coord ) ;
 	void Print_Coord_DD_to_UART		(Coordinates_struct * _coord, GPS_struct * _gps) 					;
 
+	void Calc_rocket_direction (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) ;
 
 //***********************************************************
 //***********************************************************
@@ -316,6 +317,8 @@ void NAUR_Main (void) {
 
 			Print_Coord_DD_to_UART(&Coord[GPS_CH_2], &GPS[GPS_CH_2]);
 			Print_Coord_DD_to_UART(&Coord[GPS_CH_3], &GPS[GPS_CH_3]);
+
+			Calc_rocket_direction (&Coord[GPS_CH_2], &Coord[GPS_CH_3], &Rocket);
 
 			int delta_int = GPS[2].sys_tick_u32 - GPS[3].sys_tick_u32;
 			char DebugString[DEBUG_STRING_SIZE];
@@ -686,18 +689,18 @@ uint8_t Calc_SheckSum_GGA(GPS_struct * _gps, GGA_struct * _gga, CheckSum_struct 
 	#define CS_SIZE	4
 	char cs_glue_string[CS_SIZE];
 
-	//	glue:
+	/*	glue	*/
 	memset(cs_glue_string, 0, CS_SIZE);
 	memcpy(cs_glue_string, &_gga->string[_gga->length - 4], 2);
 	_cs->glue_u8 = strtol(cs_glue_string, NULL, 16);
 
-	//	calc:
+	/*	calc	*/
 	_cs->calc_u8 = _gga->string[1];
 	for (int i=2; i<(_gga->length - 5); i++) {
 		_cs->calc_u8 ^= _gga->string[i];
 	}
 
-	//	compare:
+	/*	compare	*/
 	if (_cs->calc_u8 == _cs->glue_u8) {
 		_cs->status_flag = 1;
 		return 1;
@@ -761,10 +764,10 @@ void Parse_GGA_string(GGA_struct * _gga, GPS_struct * _gps, Coordinates_struct *
 
 void Convert_from_DMM_to_DD(Coordinates_struct * _coord ) {
 
-	uint32_t	   lat_u32	= (uint32_t)(_coord->latitude_DMM_dbl * 100000.0)	;	//	*10^5
-	uint32_t	lat_D0_u32  = lat_u32 / 10000000UL								;	//	/10^7
+	uint32_t	   lat_u32	= (uint32_t)(_coord->latitude_DMM_dbl * 100000.0)		;	//	*10^5
+	uint32_t	lat_D0_u32  = lat_u32 / 10000000UL									;	//	/10^7
 	uint32_t	lat_D1_u32	= lat_u32 -	(lat_D0_u32 * 10000000UL)					;	//	*10^7
-	_coord->latitude_DD_dbl	= (double)lat_D0_u32 + (double)lat_D1_u32/6000000.0	;	//	/60 * 10^5
+	_coord->latitude_DD_dbl	= (double)lat_D0_u32 + (double)lat_D1_u32/6000000.0		;	//	/60 * 10^5
 
 //	char DebugString[DEBUG_STRING_SIZE];
 //	sprintf(DebugString,"%d %d %d %f \r\n", (int)lat_u32, (int)lat_D0_u32, (int)lat_D1_u32, _coord->latitude_DD_dbl );
@@ -774,6 +777,84 @@ void Convert_from_DMM_to_DD(Coordinates_struct * _coord ) {
 	uint32_t	long_D0_u32 = long_u32 / 10000000UL									;	//	/10^7
 	uint32_t	long_D1_u32	= long_u32 -	(long_D0_u32 * 10000000UL)				;	//	*10^7
 	_coord->longitude_DD_dbl= (double)long_D0_u32 + (double)long_D1_u32/6000000.0	;	//	/60 * 10^5
+
+}
+//***********************************************************
+void Calc_rocket_direction (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) {
+
+	uint32_t base_X_u32     = (uint32_t)(_coord_base  ->longitude_DD_dbl * 1000000.0);
+	uint32_t rocket_X_u32   = (uint32_t)(_coord_rocket->longitude_DD_dbl * 1000000.0);
+
+	uint32_t base_Y_u32     = (uint32_t)(_coord_base  ->latitude_DD_dbl  * 1000000.0);
+	uint32_t rocket_Y_u32   = (uint32_t)(_coord_rocket->latitude_DD_dbl  * 1000000.0);
+
+	uint32_t   base_alt_u32 = (uint32_t)(_coord_base  ->altitude_dbl * 10.0);
+	uint32_t rocket_alt_u32 = (uint32_t)(_coord_rocket->altitude_dbl * 10.0);
+
+
+	int delta_X_int  = rocket_X_u32 - base_X_u32   ;
+	int delta_Y_int  = rocket_Y_u32 - base_Y_u32   ;
+
+	uint32_t koef_Y_u32 = 400UL;
+	uint32_t koef_X_u32 = 257UL;	//	400*cos(50);
+
+	if ((delta_X_int > 0) && (delta_Y_int == 0)) {
+		_rocket -> quadrant_u8 = 0;
+		_rocket -> X_distance_u32 = ((rocket_X_u32 - base_X_u32) * koef_X_u32) / 3600;
+		_rocket -> Y_distance_u32 = 0 ;
+		_rocket -> azimuth_u32 = 0;
+	}
+
+	if ((delta_X_int >= 0) && (delta_Y_int >  0)) {
+		_rocket -> quadrant_u8 = 0;
+		_rocket -> X_distance_u32 = ((rocket_X_u32 - base_X_u32) * koef_X_u32) / 3600;
+		_rocket -> Y_distance_u32 = ((rocket_Y_u32 - base_Y_u32) * koef_Y_u32) / 3600;
+		_rocket -> azimuth_u32    = (uint32_t) ((1800.0 * atan2(_rocket -> X_distance_u32, _rocket -> Y_distance_u32)) / 31.415);
+	}
+
+	if ((delta_X_int >  0) && (delta_Y_int <= 0)) {
+		_rocket->quadrant_u8 = 1;
+		_rocket -> X_distance_u32 = ((rocket_X_u32 - base_X_u32) * koef_X_u32) / 3600;
+		_rocket -> Y_distance_u32 = ((base_Y_u32 - rocket_Y_u32) * koef_Y_u32) / 3600;
+		_rocket -> azimuth_u32    = (uint32_t) ((1800.0 * atan2(_rocket -> Y_distance_u32, _rocket -> X_distance_u32)) / 31.415);
+	}
+
+	if ((delta_X_int <= 0) && (delta_Y_int <  0)) {
+		_rocket->quadrant_u8 = 2;
+		_rocket -> X_distance_u32 = ((base_X_u32 - rocket_X_u32) * koef_X_u32) / 3600;
+		_rocket -> Y_distance_u32 = ((base_Y_u32 - rocket_Y_u32) * koef_Y_u32) / 3600;
+		_rocket -> azimuth_u32    = (uint32_t) ((1800.0 * atan2(_rocket -> X_distance_u32, _rocket -> Y_distance_u32)) / 31.415);
+	}
+	if ((delta_X_int <  0) && (delta_Y_int >= 0)) {
+		_rocket->quadrant_u8 = 3;
+		_rocket -> X_distance_u32 = ((base_X_u32 - rocket_X_u32) * koef_X_u32) / 3600;
+		_rocket -> Y_distance_u32 = ((rocket_Y_u32 - base_Y_u32) * koef_Y_u32) / 3600;
+		_rocket -> azimuth_u32    = (uint32_t) ((1800.0 * atan2(_rocket -> Y_distance_u32, _rocket -> X_distance_u32)) / 31.415);
+	}
+
+	_rocket->abc_distance_u32 = (uint32_t)	sqrt(	(_rocket -> X_distance_u32 * _rocket -> X_distance_u32)
+												+	(_rocket -> Y_distance_u32 * _rocket -> Y_distance_u32)	) ;
+
+
+	int altitude_int = rocket_alt_u32 - base_alt_u32 ;
+	if (altitude_int >= 0) {
+		_rocket->altitude_U32 = altitude_int / 10;
+		_rocket->altitude_err = 0;
+	} else {
+		_rocket->altitude_U32 = 0;
+		_rocket->altitude_err = 1;
+	}
+
+	char DebugString[DEBUG_STRING_SIZE];
+	sprintf(DebugString,"X:%d Y:%d abc:%d quadr:%d Alt:%d alt_err:%d \tazimuth:%02d\r\n",
+			(int) _rocket -> X_distance_u32,
+			(int) _rocket -> Y_distance_u32,
+			(int) _rocket -> abc_distance_u32,
+			(int) _rocket -> quadrant_u8,
+			(int) _rocket -> altitude_U32,
+			(int) _rocket -> altitude_err,
+			(int) _rocket -> azimuth_u32);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 }
 //***********************************************************

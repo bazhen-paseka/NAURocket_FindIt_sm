@@ -17,6 +17,9 @@
 	#include <string.h>
 	#include "lcd.h"
 	#include "ringbuffer_dma.h"
+
+	#include<math.h>
+
 	
 //***********************************************************
 
@@ -138,6 +141,18 @@
 	}	Coordinates_struct;
 //***********************************************************
 
+	typedef struct	{
+		uint32_t 	X_distance_u32	;
+		uint32_t 	Y_distance_u32	;
+		uint32_t 	abc_distance_u32	;
+		uint8_t		quadrant_u8		;
+		uint32_t	altitude_U32	;
+		uint8_t		altitude_err	;
+		uint32_t	azimuth_u32		;
+	}	Rocket_struct;
+//***********************************************************
+
+
 	FRESULT 				fres					;
 	GPS_state_machine 		sm_stage				;
 	RESULT_ENUM 			result					;
@@ -149,6 +164,7 @@
 	SD_Card_struct 			SD						;
 	RingBuffer_DMA 			rx_buffer[GPS_CH_QNT]	;
 	Debug_struct 			Debug_ch				;
+	Rocket_struct			Rocket					;
 
 //***********************************************************
 
