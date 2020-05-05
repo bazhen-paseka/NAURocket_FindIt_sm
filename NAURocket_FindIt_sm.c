@@ -56,6 +56,7 @@
 
 	void Calc_rocket_azimuth (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) ;
 	void Calc_rocket_target  (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) ;
+	void Servo_motors (Rocket_struct * _rocket) ;
 
 //***********************************************************
 //***********************************************************
@@ -157,6 +158,10 @@ void NAUR_Init (void){
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 
 	//***********************************************************
+
+
+	HAL_TIM_PWM_Start_IT(&htim12, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start_IT(&htim12, TIM_CHANNEL_2);
 
 	LCD_FillScreen(ILI92_BLACK);
 
@@ -321,6 +326,8 @@ void NAUR_Main (void) {
 
 			Calc_rocket_azimuth (&Coord[GPS_CH_2], &Coord[GPS_CH_3], &Rocket);
 			Calc_rocket_target  (&Coord[GPS_CH_2], &Coord[GPS_CH_3], &Rocket);
+
+			Servo_motors (&Rocket);
 
 			int delta_int = GPS[2].sys_tick_u32 - GPS[3].sys_tick_u32;
 			char DebugString[DEBUG_STRING_SIZE];
@@ -865,3 +872,26 @@ void Calc_rocket_target (Coordinates_struct * _coord_base, Coordinates_struct * 
 			(int) _rocket -> target_angle_u32);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
 }
+//***********************************************************
+
+void Servo_motors (Rocket_struct * _rocket) {
+
+	#define  PWM_MIN	 500
+	#define  PWM_MAX	2400
+
+	uint16_t	pwm_azimuth_u16 = 0;
+	uint16_t	pwm_target_u16 = 0;
+
+	pwm_azimuth_u16 = (uint16_t) (PWM_MIN + ((PWM_MAX - PWM_MIN) * _rocket->azimuth_u32      ) /360) ;
+	pwm_target_u16  = (uint16_t) (PWM_MIN + ((PWM_MAX - PWM_MIN) * _rocket->target_angle_u32 ) / 90) ;
+
+	TIM12->CCR1 = pwm_azimuth_u16;
+	TIM12->CCR2 = pwm_target_u16 ;
+
+	char DebugString[DEBUG_STRING_SIZE];
+	sprintf(DebugString,"PWM azimuth:%d \t target:%d\r\n",
+			(int) pwm_azimuth_u16,
+			(int) pwm_target_u16);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+}
+//***********************************************************
