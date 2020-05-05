@@ -132,23 +132,24 @@
 //***********************************************************
 
 	typedef struct	{
-		double 	latitude_DMM_dbl	;
-		double 	longitude_DMM_dbl	;
-		double 	altitude_dbl		;
-		int		satelite_qnt_int	;
-		double 	latitude_DD_dbl		;
-		double 	longitude_DD_dbl	;
+		double 		latitude_DMM_dbl	;
+		double 		longitude_DMM_dbl	;
+		double 		altitude_dbl		;
+		int			satelite_qnt_int	;
+		double	 	latitude_DD_dbl		;
+		double 		longitude_DD_dbl	;
 	}	Coordinates_struct;
 //***********************************************************
 
 	typedef struct	{
-		uint32_t 	X_distance_u32	;
-		uint32_t 	Y_distance_u32	;
+		uint32_t 	X_distance_u32		;
+		uint32_t 	Y_distance_u32		;
 		uint32_t 	abc_distance_u32	;
-		uint8_t		quadrant_u8		;
-		uint32_t	altitude_U32	;
-		uint8_t		altitude_err	;
-		uint32_t	azimuth_u32		;
+		uint8_t		quadrant_u8			;
+		uint32_t	altitude_u32		;
+		uint8_t		altitude_err		;
+		uint32_t	azimuth_u32			;
+		uint32_t	target_angle_u32	;
 	}	Rocket_struct;
 //***********************************************************
 

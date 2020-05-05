@@ -54,7 +54,8 @@
 	void Convert_from_DMM_to_DD		(Coordinates_struct * _coord ) ;
 	void Print_Coord_DD_to_UART		(Coordinates_struct * _coord, GPS_struct * _gps) 					;
 
-	void Calc_rocket_direction (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) ;
+	void Calc_rocket_azimuth (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) ;
+	void Calc_rocket_target  (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) ;
 
 //***********************************************************
 //***********************************************************
@@ -318,7 +319,8 @@ void NAUR_Main (void) {
 			Print_Coord_DD_to_UART(&Coord[GPS_CH_2], &GPS[GPS_CH_2]);
 			Print_Coord_DD_to_UART(&Coord[GPS_CH_3], &GPS[GPS_CH_3]);
 
-			Calc_rocket_direction (&Coord[GPS_CH_2], &Coord[GPS_CH_3], &Rocket);
+			Calc_rocket_azimuth (&Coord[GPS_CH_2], &Coord[GPS_CH_3], &Rocket);
+			Calc_rocket_target  (&Coord[GPS_CH_2], &Coord[GPS_CH_3], &Rocket);
 
 			int delta_int = GPS[2].sys_tick_u32 - GPS[3].sys_tick_u32;
 			char DebugString[DEBUG_STRING_SIZE];
@@ -780,17 +782,13 @@ void Convert_from_DMM_to_DD(Coordinates_struct * _coord ) {
 
 }
 //***********************************************************
-void Calc_rocket_direction (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) {
+void Calc_rocket_azimuth (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) {
 
 	uint32_t base_X_u32     = (uint32_t)(_coord_base  ->longitude_DD_dbl * 1000000.0);
 	uint32_t rocket_X_u32   = (uint32_t)(_coord_rocket->longitude_DD_dbl * 1000000.0);
 
 	uint32_t base_Y_u32     = (uint32_t)(_coord_base  ->latitude_DD_dbl  * 1000000.0);
 	uint32_t rocket_Y_u32   = (uint32_t)(_coord_rocket->latitude_DD_dbl  * 1000000.0);
-
-	uint32_t   base_alt_u32 = (uint32_t)(_coord_base  ->altitude_dbl * 10.0);
-	uint32_t rocket_alt_u32 = (uint32_t)(_coord_rocket->altitude_dbl * 10.0);
-
 
 	int delta_X_int  = rocket_X_u32 - base_X_u32   ;
 	int delta_Y_int  = rocket_Y_u32 - base_Y_u32   ;
@@ -832,29 +830,38 @@ void Calc_rocket_direction (Coordinates_struct * _coord_base, Coordinates_struct
 		_rocket -> azimuth_u32    = (uint32_t) ((1800.0 * atan2(_rocket -> Y_distance_u32, _rocket -> X_distance_u32)) / 31.415);
 	}
 
-	_rocket->abc_distance_u32 = (uint32_t)	sqrt(	(_rocket -> X_distance_u32 * _rocket -> X_distance_u32)
-												+	(_rocket -> Y_distance_u32 * _rocket -> Y_distance_u32)	) ;
+	char DebugString[DEBUG_STRING_SIZE];
+	sprintf(DebugString,"X:%dm Y:%dm quadr:%d azimuth:%02d* ",
+			(int) _rocket -> X_distance_u32,
+			(int) _rocket -> Y_distance_u32,
+			(int) _rocket -> quadrant_u8,
+			(int) _rocket -> azimuth_u32);
+	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
+}
+//***********************************************************
 
+void Calc_rocket_target (Coordinates_struct * _coord_base, Coordinates_struct * _coord_rocket, Rocket_struct * _rocket) {
+	uint32_t   base_alt_u32 = (uint32_t)(_coord_base  ->altitude_dbl * 10.0);
+	uint32_t rocket_alt_u32 = (uint32_t)(_coord_rocket->altitude_dbl * 10.0);
 
 	int altitude_int = rocket_alt_u32 - base_alt_u32 ;
 	if (altitude_int >= 0) {
-		_rocket->altitude_U32 = altitude_int / 10;
+		_rocket->altitude_u32 = altitude_int / 10;
 		_rocket->altitude_err = 0;
 	} else {
-		_rocket->altitude_U32 = 0;
+		_rocket->altitude_u32 = 0;
 		_rocket->altitude_err = 1;
 	}
+	_rocket->abc_distance_u32 = (uint32_t)	sqrt(	(_rocket -> X_distance_u32 * _rocket -> X_distance_u32)
+												+	(_rocket -> Y_distance_u32 * _rocket -> Y_distance_u32)	) ;
+
+	_rocket->target_angle_u32 = (uint32_t) ((1800.0 * atan2(_rocket->altitude_u32, _rocket->abc_distance_u32 )) / 31.415);
 
 	char DebugString[DEBUG_STRING_SIZE];
-	sprintf(DebugString,"X:%d Y:%d abc:%d quadr:%d Alt:%d alt_err:%d \tazimuth:%02d\r\n",
-			(int) _rocket -> X_distance_u32,
-			(int) _rocket -> Y_distance_u32,
+	sprintf(DebugString,"abc:%dm Alt:%dm alt_err:%d target:%d*\r\n",
 			(int) _rocket -> abc_distance_u32,
-			(int) _rocket -> quadrant_u8,
-			(int) _rocket -> altitude_U32,
+			(int) _rocket -> altitude_u32,
 			(int) _rocket -> altitude_err,
-			(int) _rocket -> azimuth_u32);
+			(int) _rocket -> target_angle_u32);
 	HAL_UART_Transmit(Debug_ch.uart, (uint8_t *)DebugString, strlen(DebugString), 100);
-
 }
-//***********************************************************
