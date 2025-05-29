@@ -15,7 +15,7 @@
 	#include <string.h>
 	#include "lcd.h"
 	#include "ringbuffer_dma.h"
-	#include "NAUR_FI_f103_config.h"
+	#include "local_config.h"
 
 //***********************************************************
 
@@ -80,15 +80,6 @@
 	}	Flags_struct;
 //***********************************************************
 //***********************************************************
-
-	FRESULT fres;
-	GPS_state_machine sm_stage;
-	RESULT_ENUM result;
-	NEO6_struct NEO6;
-	SD_Card_struct SD;
-	RingBuffer_DMA rx_buffer;
-	Flags_struct FLAG;
-	Debug_struct DebugH;
 
 //***********************************************************
 
